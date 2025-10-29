@@ -1,11 +1,14 @@
+// ...existing code...
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Icon from '../AppIcon';
 import Button from './Button';
 
-const Header = ({ userRole = 'admin', userName = 'Administrator', isCollapsed = false, onToggleSidebar }) => {
+const Header = ({ userRole = 'admin', userName = 'Administrator', isCollapsed = false, onToggleSidebar, onLogout }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [systemStatus, setSystemStatus] = useState('online');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -16,8 +19,20 @@ const Header = ({ userRole = 'admin', userName = 'Administrator', isCollapsed = 
   }, []);
 
   const handleLogout = () => {
-    // Logout logic would go here
-    console.log('Logging out...');
+    // call any provided logout callback
+    if (typeof onLogout === 'function') {
+      try { onLogout(); } catch (e) { /* ignore errors from parent callback */ }
+    }
+
+    // clear common auth storage (non-destructive)
+    try { localStorage.removeItem('token'); } catch (e) { /* ignore */ }
+    try { localStorage.removeItem('user'); } catch (e) { /* ignore */ }
+    try { sessionStorage.removeItem('token'); } catch (e) { /* ignore */ }
+    try { sessionStorage.removeItem('user'); } catch (e) { /* ignore */ }
+
+    // close menu and navigate to authentication portal (home)
+    setShowUserMenu(false);
+    navigate('/', { replace: true });
   };
 
   const getStatusColor = () => {
@@ -146,3 +161,4 @@ const Header = ({ userRole = 'admin', userName = 'Administrator', isCollapsed = 
 };
 
 export default Header;
+// ...existing code...

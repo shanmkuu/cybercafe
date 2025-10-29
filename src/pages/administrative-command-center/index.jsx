@@ -15,7 +15,8 @@ const AdministrativeCommandCenter = ({ userRole, onLogout, isAuthenticated }) =>
   useEffect(() => {
     // Redirect if not authenticated or not admin
     if (!isAuthenticated || userRole !== 'admin') {
-      navigate('/authentication-portal');
+      // Authentication portal is mounted at the app root ("/")
+      navigate('/', { replace: true });
       return;
     }
 
@@ -71,42 +72,53 @@ const AdministrativeCommandCenter = ({ userRole, onLogout, isAuthenticated }) =>
         onToggleSidebar={() => {}}
       />
 
-      {/* Main Content Area */}
+      {/* Main Content Area: reserved space below fixed header; vertical scrolling */}
       <div className="pt-16">
-        {/* Quick Action Toolbar */}
-        <QuickActionToolbar />
+        {/* Quick Action Toolbar (ensure it can call sign-out) */}
+        <div className="px-6">
+          <QuickActionToolbar onSignOut={onLogout} />
+        </div>
 
-        {/* Dashboard Content */}
-        <div className="p-6">
+        {/* Dashboard Content: vertical stack, scrolls vertically inside viewport */}
+        <div
+          className="p-6"
+          style={{ maxHeight: 'calc(100vh - 4rem)', overflowY: 'auto' }}
+        >
           {/* Top Metrics Cards */}
-          <MetricsCards />
-
-          {/* Four-Panel Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-280px)]">
-            {/* Left Sidebar - Workstation Status Tree (15%) */}
-            <div className="lg:col-span-2">
-              <WorkstationStatusTree />
-            </div>
-
-            {/* Center-Left Panel - User Management Table (35%) */}
-            <div className="lg:col-span-4">
-              <UserManagementTable />
-            </div>
-
-            {/* Center-Right Panel - Active Session Monitoring (35%) */}
-            <div className="lg:col-span-4">
-              <ActiveSessionMonitoring />
-            </div>
-
-            {/* Right Panel - Analytics Charts (15%) */}
-            <div className="lg:col-span-2">
-              <AnalyticsCharts />
-            </div>
+          <div className="mb-6">
+            <MetricsCards />
           </div>
 
-          {/* System Status Footer */}
-          <div className="mt-6">
-            <SystemStatusIndicator position="dashboard" />
+          {/* Stacked panels (vertical flow on small screens, multi-column on lg) */}
+          <div className="flex flex-col gap-6">
+            <div className="w-full">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Left Sidebar - Workstation Status Tree */}
+                <div className="lg:col-span-3">
+                  <WorkstationStatusTree />
+                </div>
+
+                {/* Center - User Management and Active Sessions */}
+                <div className="lg:col-span-6 flex flex-col gap-6">
+                  <div>
+                    <UserManagementTable />
+                  </div>
+                  <div>
+                    <ActiveSessionMonitoring />
+                  </div>
+                </div>
+
+                {/* Right Panel - Analytics Charts */}
+                <div className="lg:col-span-3">
+                  <AnalyticsCharts />
+                </div>
+              </div>
+            </div>
+
+            {/* System Status Footer */}
+            <div>
+              <SystemStatusIndicator position="dashboard" />
+            </div>
           </div>
         </div>
       </div>
