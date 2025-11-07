@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
+import { uploadFile } from '../../../lib/storage';
 
 const UploadInterface = ({ onUpload, isUploading = false }) => {
   const [dragActive, setDragActive] = useState(false);
@@ -94,31 +95,52 @@ const UploadInterface = ({ onUpload, isUploading = false }) => {
 
   const startUpload = async () => {
     const pendingFiles = uploadQueue?.filter(f => f?.status === 'pending');
-    
-    for (const fileItem of pendingFiles) {
-      try {
-        // Update status to uploading
-        setUploadQueue(prev => prev?.map(f => 
-          f?.id === fileItem?.id ? { ...f, status: 'uploading' } : f
-        ));
+    if (!pendingFiles || pendingFiles.length === 0) return;
 
-        // Simulate upload progress
-        for (let progress = 0; progress <= 100; progress += 10) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+    // Mark overall uploading state
+    setUploadQueue(prev => prev?.map(f => f?.status === 'pending' ? { ...f, status: 'queued' } : f));
+
+    for (const fileItem of pendingFiles) {
+      // start optimistic progress animation
+      setUploadQueue(prev => prev?.map(f => 
+        f?.id === fileItem?.id ? { ...f, status: 'uploading', progress: 5 } : f
+      ));
+
+      let progress = 5;
+      const ticker = setInterval(() => {
+        progress = Math.min(90, progress + Math.floor(Math.random() * 10) + 5);
+        setUploadQueue(prev => prev?.map(f => 
+          f?.id === fileItem?.id ? { ...f, progress } : f
+        ));
+      }, 300);
+
+      try {
+        // Build a safe path. Assumption: a bucket named 'uploads' exists. Adjust as needed.
+  const safeName = `${Date.now()}_${(fileItem?.name || '').replace(/[^a-zA-Z0-9_.-]/g, '_')}`;
+        const path = `uploads/${safeName}`;
+
+        const { data, error } = await uploadFile('uploads', path, fileItem?.file);
+        clearInterval(ticker);
+
+        if (error) {
           setUploadQueue(prev => prev?.map(f => 
-            f?.id === fileItem?.id ? { ...f, progress } : f
+            f?.id === fileItem?.id ? { ...f, status: 'error', error: error?.message || String(error) } : f
           ));
+          continue;
         }
 
-        // Mark as completed
+        // finalize progress
         setUploadQueue(prev => prev?.map(f => 
-          f?.id === fileItem?.id ? { ...f, status: 'completed', progress: 100 } : f
+          f?.id === fileItem?.id ? { ...f, status: 'completed', progress: 100, uploaded: data } : f
         ));
 
-        onUpload?.(fileItem?.file);
-      } catch (error) {
+        // notify parent with upload result (file and storage data)
+        // Call parent handler with original File as first arg and storage response as second arg
+        onUpload?.(fileItem?.file, data);
+      } catch (err) {
+        clearInterval(ticker);
         setUploadQueue(prev => prev?.map(f => 
-          f?.id === fileItem?.id ? { ...f, status: 'error' } : f
+          f?.id === fileItem?.id ? { ...f, status: 'error', error: err?.message || String(err) } : f
         ));
       }
     }
