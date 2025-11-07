@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
+import { supabase } from '../../../lib/supabase';
 
 const QuickActionToolbar = () => {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'customer' });
   const [systemAlerts] = useState([
     {
       id: 'alert-001',
@@ -31,6 +34,47 @@ const QuickActionToolbar = () => {
     }
   ]);
 
+  const openAddUser = () => {
+    setShowAddUser(true);
+    setShowNotifications(false);
+  };
+
+  const closeAddUser = () => {
+    setShowAddUser(false);
+    setNewUser({ name: '', email: '', role: 'customer' });
+  };
+
+  const submitAddUser = async (e) => {
+    e.preventDefault();
+    if (!newUser.name?.trim() || !newUser.email?.trim()) {
+      // eslint-disable-next-line no-console
+      console.warn('Name and email are required');
+      return;
+    }
+
+    try {
+      const payload = {
+        name: newUser.name.trim(),
+        email: newUser.email.trim(),
+        role: newUser.role
+      };
+
+      const { data, error } = await supabase.from('users').insert([payload]).select();
+      if (error) {
+        // eslint-disable-next-line no-console
+        console.error('Supabase insert error:', error);
+        return;
+      }
+
+      // eslint-disable-next-line no-console
+      console.log('User added:', data);
+      closeAddUser();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Unexpected error adding user:', err);
+    }
+  };
+
   const quickActions = [
     {
       id: 'add-user',
@@ -38,7 +82,7 @@ const QuickActionToolbar = () => {
       icon: 'UserPlus',
       shortcut: 'Ctrl+N',
       color: 'primary',
-      action: () => console.log('Add user action')
+      action: openAddUser
     },
     {
       id: 'system-reset',
@@ -140,24 +184,79 @@ const QuickActionToolbar = () => {
         {/* Quick Actions */}
         <div className="flex items-center space-x-2">
           <span className="text-sm font-medium text-muted-foreground mr-2">Quick Actions:</span>
-          {quickActions?.map((action) => (
-            <div key={action?.id} className="relative group">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={action?.action}
-                className={`flex items-center space-x-2 ${getActionButtonColor(action?.color)} spring-hover`}
-              >
-                <Icon name={action?.icon} size={16} />
-                <span className="hidden lg:inline">{action?.label}</span>
-              </Button>
-              
-              {/* Tooltip */}
-              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded border border-border opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
-                {action?.label} ({action?.shortcut})
+          {quickActions?.map((action) => {
+            return (
+              <div key={action?.id} className="relative group">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={action?.action}
+                  className={`flex items-center space-x-2 ${getActionButtonColor(action?.color)} spring-hover`}
+                >
+                  <Icon name={action?.icon} size={16} />
+                  <span className="hidden lg:inline">{action?.label}</span>
+                </Button>
+
+                {/* Tooltip */}
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded border border-border opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+                  {action?.label} ({action?.shortcut})
+                </div>
+
+                {/* Add User inline panel */}
+                {action?.id === 'add-user' && showAddUser && (
+                  <div className="absolute right-0 top-full mt-2 w-full sm:w-72 bg-popover border border-border rounded-lg shadow-modal z-50 p-3 transform sm:translate-x-4">
+                    <form onSubmit={submitAddUser} className="space-y-3">
+                      <div>
+                        <label className="text-xs text-muted-foreground">Name</label>
+                        <input
+                          type="text"
+                          value={newUser.name}
+                          onChange={(e) => setNewUser((s) => ({ ...s, name: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-border rounded bg-input text-foreground focus:outline-none"
+                          placeholder="Full name"
+                          required
+                          autoFocus
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-muted-foreground">Email</label>
+                        <input
+                          type="email"
+                          value={newUser.email}
+                          onChange={(e) => setNewUser((s) => ({ ...s, email: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-border rounded bg-input text-foreground focus:outline-none"
+                          placeholder="user@example.com"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-muted-foreground">Role</label>
+                        <select
+                          value={newUser.role}
+                          onChange={(e) => setNewUser((s) => ({ ...s, role: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-border rounded bg-input text-foreground focus:outline-none"
+                        >
+                          <option value="customer">Customer</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </div>
+
+                      <div className="flex justify-end space-x-2 pt-1">
+                        <Button type="button" variant="ghost" size="sm" onClick={closeAddUser}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" size="sm">
+                          Add
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* System Status and Notifications */}
