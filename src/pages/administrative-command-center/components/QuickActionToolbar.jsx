@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import { supabase } from '../../../lib/supabase';
+import { hashPassword } from '../../../lib/password';
 
 const QuickActionToolbar = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAddUser, setShowAddUser] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'customer' });
+  const [newUser, setNewUser] = useState({ username: '', email: '', password: '', role: 'customer' });
+  const [addUserMessage, setAddUserMessage] = useState({ type: '', text: '' });
   const [systemAlerts] = useState([
     {
       id: 'alert-001',
@@ -41,37 +43,55 @@ const QuickActionToolbar = () => {
 
   const closeAddUser = () => {
     setShowAddUser(false);
-    setNewUser({ name: '', email: '', role: 'customer' });
+    setNewUser({ username: '', email: '', password: '', role: 'customer' });
+    setAddUserMessage({ type: '', text: '' });
   };
 
   const submitAddUser = async (e) => {
     e.preventDefault();
-    if (!newUser.name?.trim() || !newUser.email?.trim()) {
-      // eslint-disable-next-line no-console
-      console.warn('Name and email are required');
+    
+    // Validation
+    if (!newUser.username?.trim()) {
+      setAddUserMessage({ type: 'error', text: 'Username is required' });
+      return;
+    }
+    if (!newUser.email?.trim()) {
+      setAddUserMessage({ type: 'error', text: 'Email is required' });
+      return;
+    }
+    if (!newUser.password?.trim()) {
+      setAddUserMessage({ type: 'error', text: 'Password is required' });
+      return;
+    }
+    if (newUser.password.length < 6) {
+      setAddUserMessage({ type: 'error', text: 'Password must be at least 6 characters' });
       return;
     }
 
     try {
+      // Hash password using consistent method
+      const hashed_password = hashPassword(newUser.password);
+      
       const payload = {
-        name: newUser.name.trim(),
+        username: newUser.username.trim(),
         email: newUser.email.trim(),
+        password_hash: hashed_password,
         role: newUser.role
       };
 
       const { data, error } = await supabase.from('users').insert([payload]).select();
+      
       if (error) {
-        // eslint-disable-next-line no-console
-        console.error('Supabase insert error:', error);
+        setAddUserMessage({ type: 'error', text: `Error: ${error.message}` });
         return;
       }
 
-      // eslint-disable-next-line no-console
-      console.log('User added:', data);
-      closeAddUser();
+      setAddUserMessage({ type: 'success', text: `User ${newUser.username} added successfully!` });
+      setTimeout(() => {
+        closeAddUser();
+      }, 2000);
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('Unexpected error adding user:', err);
+      setAddUserMessage({ type: 'error', text: `Error: ${err.message}` });
     }
   };
 
@@ -205,15 +225,24 @@ const QuickActionToolbar = () => {
                 {/* Add User inline panel */}
                 {action?.id === 'add-user' && showAddUser && (
                   <div className="absolute right-0 top-full mt-2 w-full sm:w-72 bg-popover border border-border rounded-lg shadow-modal z-50 p-3 transform sm:translate-x-4">
+                    {addUserMessage.text && (
+                      <div className={`text-xs p-2 rounded mb-3 ${
+                        addUserMessage.type === 'error' 
+                          ? 'bg-error/10 text-error border border-error/20' 
+                          : 'bg-success/10 text-success border border-success/20'
+                      }`}>
+                        {addUserMessage.text}
+                      </div>
+                    )}
                     <form onSubmit={submitAddUser} className="space-y-3">
                       <div>
-                        <label className="text-xs text-muted-foreground">Name</label>
+                        <label className="text-xs text-muted-foreground">Username</label>
                         <input
                           type="text"
-                          value={newUser.name}
-                          onChange={(e) => setNewUser((s) => ({ ...s, name: e.target.value }))}
+                          value={newUser.username}
+                          onChange={(e) => setNewUser((s) => ({ ...s, username: e.target.value }))}
                           className="w-full px-3 py-2 text-sm border border-border rounded bg-input text-foreground focus:outline-none"
-                          placeholder="Full name"
+                          placeholder="Username"
                           required
                           autoFocus
                         />
@@ -227,6 +256,18 @@ const QuickActionToolbar = () => {
                           onChange={(e) => setNewUser((s) => ({ ...s, email: e.target.value }))}
                           className="w-full px-3 py-2 text-sm border border-border rounded bg-input text-foreground focus:outline-none"
                           placeholder="user@example.com"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-muted-foreground">Password</label>
+                        <input
+                          type="password"
+                          value={newUser.password}
+                          onChange={(e) => setNewUser((s) => ({ ...s, password: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-border rounded bg-input text-foreground focus:outline-none"
+                          placeholder="Minimum 6 characters"
                           required
                         />
                       </div>

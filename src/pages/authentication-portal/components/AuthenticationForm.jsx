@@ -4,6 +4,8 @@ import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import { Checkbox } from '../../../components/ui/Checkbox';
+import { supabase } from '../../../lib/supabase';
+import { verifyPassword } from '../../../lib/password';
 
 const AuthenticationForm = () => {
   const navigate = useNavigate();
@@ -18,12 +20,6 @@ const AuthenticationForm = () => {
   const [errors, setErrors] = useState({});
   const [loginAttempts, setLoginAttempts] = useState(0);
 
-  // Mock credentials for demonstration
-  const mockCredentials = {
-    admin: { email: 'admin@cybercafe.com', password: 'admin123' },
-    customer: { email: 'customer@cybercafe.com', password: 'customer123' }
-  };
-
   const handleInputChange = (e) => {
     const { name, value } = e?.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -35,18 +31,8 @@ const AuthenticationForm = () => {
   };
 
   const handleRoleChange = (role) => {
-    setFormData(prev => ({ ...prev, role }));
+    setFormData(prev => ({ ...prev, role, email: '', password: '' }));
     setErrors({});
-    // Auto-fill credentials when role changes for demo purposes
-    const roleCredentials = mockCredentials?.[role];
-    if (roleCredentials) {
-      setFormData(prev => ({
-        ...prev,
-        role,
-        email: roleCredentials?.email,
-        password: roleCredentials?.password
-      }));
-    }
   };
 
   const validateForm = () => {
@@ -69,6 +55,7 @@ const AuthenticationForm = () => {
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
+    console.log('handleSubmit called');
     
     const validationErrors = validateForm();
     if (Object.keys(validationErrors)?.length > 0) {
@@ -80,37 +67,84 @@ const AuthenticationForm = () => {
     setErrors({});
 
     try {
-      // Simulate authentication delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const expectedCredentials = mockCredentials?.[formData?.role];
+      // Query Supabase for user with matching email
+      console.log('Attempting login with email:', formData?.email);
       
-      if (formData?.email === expectedCredentials?.email && formData?.password === expectedCredentials?.password) {
-        // Successful authentication
-        const authData = {
-          email: formData?.email,
-          role: formData?.role,
-          timestamp: new Date()?.toISOString(),
-          rememberDevice: formData?.rememberDevice
-        };
+      const { data: users, error: queryError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', formData?.email)
+        .single();
 
-        localStorage.setItem('cyberCafeAuth', JSON.stringify(authData));
-        
-        // Reset login attempts on successful login
-        setLoginAttempts(0);
-        
-        // Route based on role
-        if (formData?.role === 'admin') {
-          navigate('/administrative-command-center');
-        } else {
-          navigate('/customer-workspace-portal');
-        }
-      } else {
-        // Failed authentication
+      console.log('Query error:', queryError);
+      console.log('User data:', users);
+
+      if (queryError || !users) {
+        console.error('User not found or query error:', queryError);
         setLoginAttempts(prev => prev + 1);
         setErrors({ 
-          general: `Invalid credentials. Check your email and password.\n\nFor testing purposes:\n• Admin: ${mockCredentials?.admin?.email} / ${mockCredentials?.admin?.password}\n• Customer: ${mockCredentials?.customer?.email} / ${mockCredentials?.customer?.password}` 
+          general: 'Invalid email or password. Please check your credentials and try again.'
         });
+        setIsLoading(false);
+        return;
+      }
+
+      // Validate password (compare with stored hash)
+      const storedHash = users?.password_hash;
+      const isPasswordValid = verifyPassword(formData?.password, storedHash);
+      
+      // Fallback: also try simple btoa() for users added with old method
+      const legacyHash = btoa(formData?.password);
+      const isLegacyPasswordValid = legacyHash === storedHash;
+
+      // Debug logging - show actual hashes
+      console.log('=== PASSWORD DEBUG ===');
+      console.log('Input password:', formData?.password);
+      console.log('Stored hash (first 50 chars):', storedHash?.substring(0, 50));
+      console.log('Legacy hash (first 50 chars):', legacyHash?.substring(0, 50));
+      console.log('New method hash (first 50 chars):', verifyPassword(formData?.password, storedHash) ? 'MATCH' : hashPassword(formData?.password)?.substring(0, 50));
+      console.log('Legacy match:', isLegacyPasswordValid);
+      console.log('New method match:', isPasswordValid);
+      console.log('=== END DEBUG ===');
+
+      if (!isPasswordValid && !isLegacyPasswordValid) {
+        setLoginAttempts(prev => prev + 1);
+        setErrors({ 
+          general: 'Invalid email or password. Please check your credentials and try again.'
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Validate role matches (optional: allow any role stored in DB)
+      if (users?.role !== formData?.role) {
+        setErrors({ 
+          general: `This account is registered as ${users?.role}. Please select the correct access level.`
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Successful authentication
+      const authData = {
+        email: formData?.email,
+        username: users?.username,
+        role: users?.role,
+        userId: users?.id,
+        timestamp: new Date()?.toISOString(),
+        rememberDevice: formData?.rememberDevice
+      };
+
+      localStorage.setItem('cyberCafeAuth', JSON.stringify(authData));
+      
+      // Reset login attempts on successful login
+      setLoginAttempts(0);
+      
+      // Route based on role
+      if (users?.role === 'admin') {
+        navigate('/administrative-command-center');
+      } else {
+        navigate('/customer-workspace-portal');
       }
     } catch (error) {
       setErrors({ general: 'Authentication service unavailable. Please try again.' });
@@ -129,16 +163,9 @@ const AuthenticationForm = () => {
   };
 
   const handleQuickLogin = (role) => {
-    const credentials = mockCredentials?.[role];
-    if (credentials) {
-      setFormData({
-        ...formData,
-        role,
-        email: credentials?.email,
-        password: credentials?.password
-      });
-      setErrors({});
-    }
+    setFormData(prev => ({ ...prev, role, email: '', password: '' }));
+    setErrors({});
+    alert(`Selected ${role} role. Please enter your credentials to log in.`);
   };
 
   return (

@@ -6,7 +6,7 @@ const MetricsCards = () => {
     {
       id: 'total-users',
       title: 'Total Users',
-      value: '247',
+      value: '10',
       change: '+12',
       changeType: 'increase',
       icon: 'Users',
@@ -24,8 +24,8 @@ const MetricsCards = () => {
     {
       id: 'files-uploaded',
       title: 'Files Uploaded',
-      value: '1,342',
-      change: '+89',
+      value: '3',
+      change: '+3',
       changeType: 'increase',
       icon: 'Upload',
       color: 'success'
