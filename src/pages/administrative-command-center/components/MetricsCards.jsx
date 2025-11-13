@@ -7,7 +7,7 @@ const MetricsCards = () => {
       id: 'total-users',
       title: 'Total Users',
       value: '10',
-      change: '+12',
+      change: '+5',
       changeType: 'increase',
       icon: 'Users',
       color: 'primary'

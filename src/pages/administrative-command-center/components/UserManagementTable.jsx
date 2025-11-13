@@ -130,23 +130,7 @@ const UserManagementTable = () => {
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-foreground">User Management</h3>
         <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            iconName="Plus"
-            iconPosition="left"
-            onClick={() => setShowAddUser(true)}>
-
-            Add User
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            iconName="Download"
-            iconPosition="left">
-
-            Export
-          </Button>
+         
         </div>
       </div>
       {/* Search and Filter Controls */}

@@ -47,53 +47,77 @@ const QuickActionToolbar = () => {
     setAddUserMessage({ type: '', text: '' });
   };
 
-  const submitAddUser = async (e) => {
-    e.preventDefault();
-    
-    // Validation
-    if (!newUser.username?.trim()) {
-      setAddUserMessage({ type: 'error', text: 'Username is required' });
-      return;
-    }
-    if (!newUser.email?.trim()) {
-      setAddUserMessage({ type: 'error', text: 'Email is required' });
-      return;
-    }
-    if (!newUser.password?.trim()) {
-      setAddUserMessage({ type: 'error', text: 'Password is required' });
-      return;
-    }
-    if (newUser.password.length < 6) {
-      setAddUserMessage({ type: 'error', text: 'Password must be at least 6 characters' });
+const submitAddUser = async (e) => {
+  e.preventDefault();
+
+  // Validation
+  if (!newUser.username?.trim()) {
+    setAddUserMessage({ type: 'error', text: 'Username is required' });
+    return;
+  }
+  if (!newUser.email?.trim()) {
+    setAddUserMessage({ type: 'error', text: 'Email is required' });
+    return;
+  }
+  if (!newUser.password?.trim()) {
+    setAddUserMessage({ type: 'error', text: 'Password is required' });
+    return;
+  }
+  if (newUser.password.length < 6) {
+    setAddUserMessage({ type: 'error', text: 'Password must be at least 6 characters' });
+    return;
+  }
+
+  try {
+    // 1️⃣ Create the user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: newUser.email.trim(),
+      password: newUser.password,
+      options: {
+        emailRedirectTo: undefined, // skip redirect
+      },
+    });
+
+    if (authError) {
+      setAddUserMessage({ type: 'error', text: `Auth error: ${authError.message}` });
       return;
     }
 
-    try {
-      // Hash password using consistent method
-      const hashed_password = hashPassword(newUser.password);
-      
-      const payload = {
+    const userId = authData?.user?.id;
+    if (!userId) {
+      setAddUserMessage({ type: 'error', text: 'User creation failed: no user ID returned.' });
+      return;
+    }
+
+    // 2️⃣ Insert into your custom users table with the same user_id
+    const { error: dbError } = await supabase.from('users').insert([
+      {
+        id: userId, // keep consistent with Supabase Auth ID
         username: newUser.username.trim(),
         email: newUser.email.trim(),
-        password_hash: hashed_password,
-        role: newUser.role
-      };
+        role: newUser.role,
+      },
+    ]);
 
-      const { data, error } = await supabase.from('users').insert([payload]).select();
-      
-      if (error) {
-        setAddUserMessage({ type: 'error', text: `Error: ${error.message}` });
-        return;
-      }
-
-      setAddUserMessage({ type: 'success', text: `User ${newUser.username} added successfully!` });
-      setTimeout(() => {
-        closeAddUser();
-      }, 2000);
-    } catch (err) {
-      setAddUserMessage({ type: 'error', text: `Error: ${err.message}` });
+    if (dbError) {
+      setAddUserMessage({ type: 'error', text: `Database error: ${dbError.message}` });
+      return;
     }
-  };
+
+    setAddUserMessage({
+      type: 'success',
+      text: `User ${newUser.username} added successfully!`,
+    });
+
+    setTimeout(() => {
+      closeAddUser();
+    }, 2000);
+  } catch (err) {
+    console.error(err);
+    setAddUserMessage({ type: 'error', text: `Error: ${err.message}` });
+  }
+};
+
 
   const quickActions = [
     {

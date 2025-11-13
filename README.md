@@ -43,7 +43,8 @@ react_app/
 ├── public/             # Static assets
 ├── src/
 │   ├── components/     # Reusable UI components
-│   ├── pages/          # Page components
+│   ├── lib/ 
+    ├── pages/          # Page components
 │   ├── styles/         # Global styles and Tailwind configuration
 │   ├── App.jsx         # Main application component
 │   ├── Routes.jsx      # Application routes
@@ -92,9 +93,6 @@ The app is built with responsive design using Tailwind CSS breakpoints.
 
 
 ## 📦 Deployment
-
-Build the application for production:
-Absolutely 👍 — here’s a **fully rewritten version** of your **deployment guide** in **clear paragraph form**, without using tables, but keeping it structured, professional, and concise:
 
 ---
 

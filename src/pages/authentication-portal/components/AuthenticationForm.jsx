@@ -53,6 +53,9 @@ const AuthenticationForm = () => {
     return newErrors;
   };
 
+// You no longer need this import, you can remove it:
+  // import { verifyPassword } from '../../../lib/password';
+
   const handleSubmit = async (e) => {
     e?.preventDefault();
     console.log('handleSubmit called');
@@ -67,87 +70,85 @@ const AuthenticationForm = () => {
     setErrors({});
 
     try {
-      // Query Supabase for user with matching email
-      console.log('Attempting login with email:', formData?.email);
-      
-      const { data: users, error: queryError } = await supabase
+      // --- START: NEW LOGIN LOGIC ---
+
+      console.log('--- LOGIN ATTEMPT (Using Supabase Auth) ---');
+      console.log('Attempting auth with email:', formData.email);
+
+      // 1. Sign in using Supabase Auth (this is the correct way)
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      console.log('Supabase Auth response (data):', authData);
+      console.log('Supabase Auth response (error):', authError);
+
+      if (authError) {
+        console.error('Supabase Auth Error:', authError.message);
+        setLoginAttempts(prev => prev + 1);
+        setErrors({ 
+          general: 'Invalid email or password. Please check your credentials and try again.'
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Auth was successful! Now get the user's role from our *public* 'users' table
+      const userId = authData.user.id;
+      const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('*')
-        .eq('email', formData?.email)
+        .select('role, username') // Only select what we need
+        .eq('id', userId)
         .single();
 
-      console.log('Query error:', queryError);
-      console.log('User data:', users);
-
-      if (queryError || !users) {
-        console.error('User not found or query error:', queryError);
-        setLoginAttempts(prev => prev + 1);
-        setErrors({ 
-          general: 'Invalid email or password. Please check your credentials and try again.'
-        });
+      if (userError || !userData) {
+        // This is a critical error: user is authenticated but has no profile.
+        console.error('User logged in but profile data not found in "users" table.', userError);
+        setErrors({ general: 'Login successful, but failed to retrieve user profile. Please contact support.' });
+        await supabase.auth.signOut(); // Log them back out for safety
         setIsLoading(false);
         return;
       }
 
-      // Validate password (compare with stored hash)
-      const storedHash = users?.password_hash;
-      const isPasswordValid = verifyPassword(formData?.password, storedHash);
-      
-      // Fallback: also try simple btoa() for users added with old method
-      const legacyHash = btoa(formData?.password);
-      const isLegacyPasswordValid = legacyHash === storedHash;
-
-      // Debug logging - show actual hashes
-      console.log('=== PASSWORD DEBUG ===');
-      console.log('Input password:', formData?.password);
-      console.log('Stored hash (first 50 chars):', storedHash?.substring(0, 50));
-      console.log('Legacy hash (first 50 chars):', legacyHash?.substring(0, 50));
-      console.log('New method hash (first 50 chars):', verifyPassword(formData?.password, storedHash) ? 'MATCH' : hashPassword(formData?.password)?.substring(0, 50));
-      console.log('Legacy match:', isLegacyPasswordValid);
-      console.log('New method match:', isPasswordValid);
-      console.log('=== END DEBUG ===');
-
-      if (!isPasswordValid && !isLegacyPasswordValid) {
-        setLoginAttempts(prev => prev + 1);
+      // 3. Validate role matches the one selected on the form
+      if (userData.role !== formData.role) {
         setErrors({ 
-          general: 'Invalid email or password. Please check your credentials and try again.'
+          general: `This account is registered as '${userData.role}'. Please select the correct access level.`
         });
+        await supabase.auth.signOut(); // Log them back out
         setIsLoading(false);
         return;
       }
 
-      // Validate role matches (optional: allow any role stored in DB)
-      if (users?.role !== formData?.role) {
-        setErrors({ 
-          general: `This account is registered as ${users?.role}. Please select the correct access level.`
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      // Successful authentication
-      const authData = {
-        email: formData?.email,
-        username: users?.username,
-        role: users?.role,
-        userId: users?.id,
-        timestamp: new Date()?.toISOString(),
-        rememberDevice: formData?.rememberDevice
+      // 4. EVERYTHING IS GOOD!
+      // Supabase's client now automatically manages the session.
+      // We can still save our own local data for the app's convenience.
+      const sessionData = {
+        email: authData.user.email,
+        username: userData.username,
+        role: userData.role,
+        userId: authData.user.id,
+        timestamp: new Date().toISOString(),
+        rememberDevice: formData.rememberDevice
       };
 
-      localStorage.setItem('cyberCafeAuth', JSON.stringify(authData));
+      localStorage.setItem('cyberCafeAuth', JSON.stringify(sessionData));
       
       // Reset login attempts on successful login
       setLoginAttempts(0);
       
       // Route based on role
-      if (users?.role === 'admin') {
+      if (userData.role === 'admin') {
         navigate('/administrative-command-center');
       } else {
         navigate('/customer-workspace-portal');
       }
+      // --- END: NEW LOGIN LOGIC ---
+
     } catch (error) {
-      setErrors({ general: 'Authentication service unavailable. Please try again.' });
+        console.error('A critical error occurred:', error);
+        setErrors({ general: 'Authentication service unavailable. Please try again.' });
     } finally {
       setIsLoading(false);
     }
