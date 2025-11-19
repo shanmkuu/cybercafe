@@ -6,7 +6,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Header from '../../components/ui/Header';
 import ErrorBoundaryNavigation from '../../components/ui/ErrorBoundaryNavigation';
-import { getUserFiles, createSession, endSession, logFileActivity } from '../../lib/db';
+import { getUserFiles, createSession, endSession, logFileActivity, getUserActivityLogs } from '../../lib/db';
 import { downloadFile } from '../../lib/storage';
 
 // Import components
@@ -26,6 +26,7 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
   const [showUploadInterface, setShowUploadInterface] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [files, setFiles] = useState([]);
+  const [activities, setActivities] = useState([]);
   const [userEmail, setUserEmail] = useState('');
   const [userId, setUserId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -105,16 +106,28 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
     setIsLoading(false);
   };
 
+  const fetchActivities = async () => {
+    if (!userId) return;
+    const { data, error } = await getUserActivityLogs(userId);
+    if (error) {
+      console.error('Error fetching activities:', error);
+    } else {
+      setActivities(data || []);
+    }
+  };
+
   useEffect(() => {
     if (userId) {
       fetchFiles();
+      fetchActivities();
     }
   }, [userId]);
 
   const handleFileUpload = async (file, fileData) => {
-    // Refresh file list after upload
+    // Refresh file list and activities after upload
     if (userId) {
       fetchFiles();
+      fetchActivities();
     }
   };
 
@@ -139,6 +152,7 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
 
           if (userId) {
             await logFileActivity(userId, file.name, 'download');
+            fetchActivities(); // Refresh activities
           }
         } else {
           console.error('Error downloading file:', error);
@@ -281,11 +295,15 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
                   <FileBrowser
                     onFolderSelect={setSelectedFolder}
                     selectedFolder={selectedFolder}
+                    files={files}
                   />
                 </div>
 
                 {/* Quick Actions */}
-                <QuickActions onAction={handleQuickAction} />
+                <QuickActions
+                  onAction={handleQuickAction}
+                  files={files}
+                />
               </div>
 
               {/* Main Content Area */}
@@ -317,7 +335,7 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
               {/* Right Sidebar - Activity Panel */}
               <div className="col-span-12 lg:col-span-3">
                 <div className="h-[600px]">
-                  <FileActivityPanel />
+                  <FileActivityPanel activities={activities} />
                 </div>
               </div>
             </div>

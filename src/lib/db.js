@@ -116,3 +116,20 @@ export async function logFileActivity(userId, fileName, action) {
         return { error };
     }
 }
+
+export async function getUserActivityLogs(userId) {
+    try {
+        const { data, error } = await supabase
+            .from('file_logs')
+            .select('*')
+            .eq('user_id', userId)
+            .order('timestamp', { ascending: false })
+            .limit(50);
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('getUserActivityLogs error', error);
+        return { data: null, error };
+    }
+}

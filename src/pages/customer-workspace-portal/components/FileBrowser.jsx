@@ -1,10 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Icon from '../../../components/AppIcon';
 import Input from '../../../components/ui/Input';
 
-const FileBrowser = ({ onFolderSelect, selectedFolder }) => {
+const FileBrowser = ({ onFolderSelect, selectedFolder, files = [] }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedFolders, setExpandedFolders] = useState(['root', 'documents']);
+
+  // Calculate storage stats
+  const storageStats = useMemo(() => {
+    const totalSize = files.reduce((acc, file) => acc + (file.size || 0), 0);
+    const totalGB = totalSize / (1024 * 1024 * 1024);
+    const limitGB = 5.0; // Hardcoded limit for now, could be from user plan
+    const percentage = Math.min((totalGB / limitGB) * 100, 100);
+
+    return {
+      used: totalGB.toFixed(2),
+      limit: limitGB.toFixed(1),
+      percentage
+    };
+  }, [files]);
 
   const folderStructure = [
     {
@@ -45,8 +59,8 @@ const FileBrowser = ({ onFolderSelect, selectedFolder }) => {
   ];
 
   const toggleFolder = (folderId) => {
-    setExpandedFolders(prev => 
-      prev?.includes(folderId) 
+    setExpandedFolders(prev =>
+      prev?.includes(folderId)
         ? prev?.filter(id => id !== folderId)
         : [...prev, folderId]
     );
@@ -60,10 +74,9 @@ const FileBrowser = ({ onFolderSelect, selectedFolder }) => {
     return (
       <div key={folder?.id}>
         <div
-          className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer transition-colors ${
-            isSelected 
-              ? 'bg-primary/10 text-primary border border-primary/20' :'hover:bg-muted text-foreground'
-          }`}
+          className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer transition-colors ${isSelected
+              ? 'bg-primary/10 text-primary border border-primary/20' : 'hover:bg-muted text-foreground'
+            }`}
           style={{ paddingLeft: `${level * 16 + 8}px` }}
           onClick={() => {
             onFolderSelect?.(folder?.id);
@@ -71,16 +84,16 @@ const FileBrowser = ({ onFolderSelect, selectedFolder }) => {
           }}
         >
           {hasChildren && (
-            <Icon 
-              name={isExpanded ? "ChevronDown" : "ChevronRight"} 
-              size={16} 
-              className="text-muted-foreground" 
+            <Icon
+              name={isExpanded ? "ChevronDown" : "ChevronRight"}
+              size={16}
+              className="text-muted-foreground"
             />
           )}
-          <Icon 
-            name={folder?.icon} 
-            size={16} 
-            className={isSelected ? "text-primary" : "text-muted-foreground"} 
+          <Icon
+            name={folder?.icon}
+            size={16}
+            className={isSelected ? "text-primary" : "text-muted-foreground"}
           />
           <span className="text-sm font-medium truncate">{folder?.name}</span>
         </div>
@@ -95,10 +108,10 @@ const FileBrowser = ({ onFolderSelect, selectedFolder }) => {
 
   const filteredFolders = (folders) => {
     if (!searchTerm) return folders;
-    
-    return folders?.filter(folder => 
+
+    return folders?.filter(folder =>
       folder?.name?.toLowerCase()?.includes(searchTerm?.toLowerCase()) ||
-      (folder?.children && folder?.children?.some(child => 
+      (folder?.children && folder?.children?.some(child =>
         child?.name?.toLowerCase()?.includes(searchTerm?.toLowerCase())
       ))
     );
@@ -122,10 +135,13 @@ const FileBrowser = ({ onFolderSelect, selectedFolder }) => {
       <div className="p-4 border-t border-border">
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>Storage Used</span>
-          <span className="font-mono">2.4 GB / 5.0 GB</span>
+          <span className="font-mono">{storageStats.used} GB / {storageStats.limit} GB</span>
         </div>
         <div className="w-full bg-muted rounded-full h-2 mt-2">
-          <div className="bg-primary h-2 rounded-full" style={{ width: '48%' }}></div>
+          <div
+            className="bg-primary h-2 rounded-full transition-all duration-500"
+            style={{ width: `${storageStats.percentage}%` }}
+          ></div>
         </div>
       </div>
     </div>

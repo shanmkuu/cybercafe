@@ -29,20 +29,25 @@ const SessionTimer = ({
   };
 
   const getRemainingTime = () => {
-    const remainingSeconds = remainingCredit * 60;
+    const elapsedSeconds = Math.floor((currentTime - sessionStartTime) / 1000);
+    const totalSeconds = remainingCredit * 60;
+    const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
+    
     const hours = Math.floor(remainingSeconds / 3600);
     const minutes = Math.floor((remainingSeconds % 3600) / 60);
-    return { hours, minutes };
-  };
-
-  const getStatusColor = () => {
-    if (remainingCredit > 30) return 'text-success';
-    if (remainingCredit > 10) return 'text-warning';
-    return 'text-error';
+    const seconds = remainingSeconds % 60;
+    return { hours, minutes, seconds, totalMinutes: Math.floor(remainingSeconds / 60) };
   };
 
   const elapsed = getElapsedTime();
   const remaining = getRemainingTime();
+
+  const getStatusColor = () => {
+    if (remaining.totalMinutes > 30) return 'text-success';
+    if (remaining.totalMinutes > 10) return 'text-warning';
+    return 'text-error';
+  };
+
   const statusColor = getStatusColor();
 
   return (
@@ -69,7 +74,7 @@ const SessionTimer = ({
 
         <div className="text-center p-3 bg-muted rounded-lg">
           <div className={`text-2xl font-mono font-bold ${statusColor}`}>
-            {String(remaining?.hours)?.padStart(2, '0')}:{String(remaining?.minutes)?.padStart(2, '0')}
+            {String(remaining?.hours)?.padStart(2, '0')}:{String(remaining?.minutes)?.padStart(2, '0')}:{String(remaining?.seconds)?.padStart(2, '0')}
           </div>
           <div className="text-xs text-muted-foreground mt-1">Remaining</div>
         </div>

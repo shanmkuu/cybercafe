@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const QuickActions = ({ onAction }) => {
+const QuickActions = ({ onAction, files = [] }) => {
   const [showShortcuts, setShowShortcuts] = useState(false);
 
   const quickActions = [
@@ -40,24 +40,44 @@ const QuickActions = ({ onAction }) => {
     }
   ];
 
-  const systemInfo = [
-    {
-      label: 'Storage Used',
-      value: '2.4 GB / 5.0 GB',
-      percentage: 48,
-      icon: 'HardDrive'
-    },
-    {
-      label: 'Files Count',
-      value: '127 files',
-      icon: 'Files'
-    },
-    {
-      label: 'Last Sync',
-      value: '2 minutes ago',
-      icon: 'RefreshCw'
-    }
-  ];
+  const systemInfo = useMemo(() => {
+    const totalSize = files.reduce((acc, file) => acc + (file.size || 0), 0);
+    const totalGB = totalSize / (1024 * 1024 * 1024);
+    const limitGB = 5.0;
+    const percentage = Math.min((totalGB / limitGB) * 100, 100);
+
+    const lastFile = files.length > 0 ? files[0] : null; // Files are sorted by date desc
+    const lastSyncTime = lastFile ? new Date(lastFile.created_at) : new Date();
+
+    const getTimeAgo = (date) => {
+      const seconds = Math.floor((new Date() - date) / 1000);
+      if (seconds < 60) return 'Just now';
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+      return date.toLocaleDateString();
+    };
+
+    return [
+      {
+        label: 'Storage Used',
+        value: `${totalGB.toFixed(2)} GB / ${limitGB.toFixed(1)} GB`,
+        percentage: percentage,
+        icon: 'HardDrive'
+      },
+      {
+        label: 'Files Count',
+        value: `${files.length} files`,
+        icon: 'Files'
+      },
+      {
+        label: 'Last Sync',
+        value: getTimeAgo(lastSyncTime),
+        icon: 'RefreshCw'
+      }
+    ];
+  }, [files]);
 
   const handleKeyboardShortcut = (e) => {
     if (e?.ctrlKey || e?.metaKey) {
@@ -146,7 +166,7 @@ const QuickActions = ({ onAction }) => {
       {/* System Information */}
       <div className="bg-card border border-border rounded-lg p-4">
         <h3 className="font-semibold text-card-foreground mb-4">System Info</h3>
-        
+
         <div className="space-y-3">
           {systemInfo?.map((info, index) => (
             <div key={index} className="flex items-center justify-between">
@@ -156,9 +176,9 @@ const QuickActions = ({ onAction }) => {
               </div>
               <div className="text-right">
                 <div className="text-sm font-medium text-foreground">{info?.value}</div>
-                {info?.percentage && (
+                {info?.percentage !== undefined && (
                   <div className="w-20 bg-muted rounded-full h-1.5 mt-1">
-                    <div 
+                    <div
                       className="bg-primary h-1.5 rounded-full transition-all"
                       style={{ width: `${info?.percentage}%` }}
                     ></div>
@@ -178,9 +198,9 @@ const QuickActions = ({ onAction }) => {
           </div>
           <span className="text-xs text-success font-mono">ONLINE</span>
         </div>
-        
+
         <div className="mt-3 text-xs text-muted-foreground">
-          All files are automatically synchronized with cloud storage. 
+          All files are automatically synchronized with cloud storage.
           Your data is secure and accessible from any device.
         </div>
 
