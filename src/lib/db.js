@@ -151,6 +151,42 @@ export async function getUsers() {
     }
 }
 
+export async function updateUserProfile(userId, updates) {
+    try {
+        const { data, error } = await supabase
+            .from('profiles')
+            .update(updates)
+            .eq('id', userId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('updateUserProfile error', error);
+        return { data: null, error };
+    }
+}
+
+export async function deleteUserProfile(userId) {
+    try {
+        // Note: Deleting a user might have cascading effects or be restricted by FKs.
+        // For now, we'll attempt to delete from the profiles table.
+        // In a real Supabase app, you might also need to delete from auth.users via Admin API,
+        // but that's not available in the client client usually.
+        const { error } = await supabase
+            .from('profiles')
+            .delete()
+            .eq('id', userId);
+
+        if (error) throw error;
+        return { error: null };
+    } catch (error) {
+        console.error('deleteUserProfile error', error);
+        return { error };
+    }
+}
+
 export async function getActiveSessions() {
     try {
         // Join with profiles to get user details

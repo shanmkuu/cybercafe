@@ -2,11 +2,15 @@ import React, { useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
+import { updateUserProfile, deleteUserProfile } from '../../../lib/db';
 
-const UserManagementTable = ({ users }) => {
+const UserManagementTable = ({ users, onRefresh }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [filterRole, setFilterRole] = useState('all');
+  const [activeActionMenu, setActiveActionMenu] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const usersData = users ? users.map(user => {
     // Derive display name: Full Name -> Username -> Email part -> 'Unknown'
@@ -24,7 +28,7 @@ const UserManagementTable = ({ users }) => {
 
     return {
       id: user.id,
-      username: user.email, // Show email as secondary info
+      username: user.username || user.email, // Show email as secondary info
       fullName: displayName,
       email: user.email || '',
       role: user.role || 'customer',
@@ -83,8 +87,80 @@ const UserManagementTable = ({ users }) => {
     }
   };
 
+  // --- Action Handlers ---
+
+  const toggleActionMenu = (userId) => {
+    if (activeActionMenu === userId) {
+      setActiveActionMenu(null);
+    } else {
+      setActiveActionMenu(userId);
+    }
+  };
+
+  const handleEditClick = (user) => {
+    setEditingUser({ ...user });
+    setActiveActionMenu(null);
+  };
+
+  const handleSaveUser = async (e) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    setIsProcessing(true);
+    try {
+      const updates = {
+        full_name: editingUser.fullName,
+        role: editingUser.role,
+        status: editingUser.status
+      };
+
+      const { error } = await updateUserProfile(editingUser.id, updates);
+      if (error) {
+        alert('Failed to update user: ' + error.message);
+      } else {
+        setEditingUser(null);
+        if (onRefresh) onRefresh();
+      }
+    } catch (err) {
+      console.error('Error updating user:', err);
+      alert('An unexpected error occurred.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleToggleStatus = async (user) => {
+    setActiveActionMenu(null);
+    if (!window.confirm(`Are you sure you want to ${user.status === 'active' ? 'suspend' : 'activate'} this user?`)) {
+      return;
+    }
+
+    const newStatus = user.status === 'active' ? 'suspended' : 'active';
+    const { error } = await updateUserProfile(user.id, { status: newStatus });
+
+    if (error) {
+      alert('Failed to update status: ' + error.message);
+    } else {
+      if (onRefresh) onRefresh();
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    setActiveActionMenu(null);
+    if (!window.confirm('Are you sure you want to DELETE this user? This action cannot be undone.')) {
+      return;
+    }
+
+    const { error } = await deleteUserProfile(userId);
+    if (error) {
+      alert('Failed to delete user: ' + error.message);
+    } else {
+      if (onRefresh) onRefresh();
+    }
+  };
+
   return (
-    <div className="bg-card rounded-lg border border-border p-4 h-full">
+    <div className="bg-card rounded-lg border border-border p-4 h-full relative">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-foreground">User Management</h3>
       </div>
@@ -117,13 +193,13 @@ const UserManagementTable = ({ users }) => {
             {selectedUsers.length} user{selectedUsers.length > 1 ? 's' : ''} selected
           </span>
           <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm" iconName="Edit">
-              Edit
+            <Button variant="outline" size="sm" iconName="Edit" disabled>
+              Edit (Bulk N/A)
             </Button>
-            <Button variant="outline" size="sm" iconName="UserX">
+            <Button variant="outline" size="sm" iconName="UserX" disabled>
               Suspend
             </Button>
-            <Button variant="destructive" size="sm" iconName="Trash2">
+            <Button variant="destructive" size="sm" iconName="Trash2" disabled>
               Delete
             </Button>
           </div>
@@ -131,7 +207,7 @@ const UserManagementTable = ({ users }) => {
       )}
 
       {/* Users Table */}
-      <div className="overflow-x-auto max-h-96">
+      <div className="overflow-x-auto max-h-96 pb-24"> {/* Added padding bottom for dropdown space */}
         <table className="w-full">
           <thead className="border-b border-border">
             <tr>
@@ -154,7 +230,7 @@ const UserManagementTable = ({ users }) => {
           </thead>
           <tbody>
             {filteredUsers.map((user) => (
-              <tr key={user.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+              <tr key={user.id} className="border-b border-border hover:bg-muted/50 transition-colors relative">
                 <td className="p-3">
                   <input
                     type="checkbox"
@@ -165,7 +241,6 @@ const UserManagementTable = ({ users }) => {
                 </td>
                 <td className="p-3">
                   <div className="flex items-center space-x-3">
-                    {/* Avatar removed as requested */}
                     <div>
                       <div className="font-medium text-foreground">{user.fullName}</div>
                       <div className="text-sm text-muted-foreground">{user.username}</div>
@@ -191,11 +266,41 @@ const UserManagementTable = ({ users }) => {
                 <td className="p-3 text-sm text-foreground font-mono">
                   {user.filesUploaded}
                 </td>
-                <td className="p-3">
+                <td className="p-3 relative">
                   <div className="flex items-center space-x-1">
-                    <Button variant="ghost" size="sm" iconName="Edit" />
-                    <Button variant="ghost" size="sm" iconName="Eye" />
-                    <Button variant="ghost" size="sm" iconName="MoreHorizontal" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      iconName="MoreHorizontal"
+                      onClick={() => toggleActionMenu(user.id)}
+                    />
+                    {/* Dropdown Menu */}
+                    {activeActionMenu === user.id && (
+                      <div className="absolute right-0 top-full mt-1 w-48 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+                        <button
+                          onClick={() => handleEditClick(user)}
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-muted transition-colors flex items-center space-x-2"
+                        >
+                          <Icon name="Edit" size={14} />
+                          <span>Edit Details</span>
+                        </button>
+                        <button
+                          onClick={() => handleToggleStatus(user)}
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-muted transition-colors flex items-center space-x-2"
+                        >
+                          <Icon name={user.status === 'active' ? 'UserX' : 'CheckCircle'} size={14} />
+                          <span>{user.status === 'active' ? 'Suspend User' : 'Activate User'}</span>
+                        </button>
+                        <div className="border-t border-border my-1"></div>
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="w-full text-left px-4 py-2 text-sm text-error hover:bg-error/10 transition-colors flex items-center space-x-2"
+                        >
+                          <Icon name="Trash2" size={14} />
+                          <span>Delete User</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -208,6 +313,65 @@ const UserManagementTable = ({ users }) => {
         <div className="text-center py-8">
           <Icon name="Users" size={48} className="text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">No users found matching your criteria</p>
+        </div>
+      )}
+
+      {/* Edit User Modal Overlay */}
+      {editingUser && (
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold">Edit User</h3>
+              <button onClick={() => setEditingUser(null)} className="text-muted-foreground hover:text-foreground">
+                <Icon name="X" size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveUser} className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-1 block">Full Name</label>
+                <Input
+                  value={editingUser.fullName}
+                  onChange={(e) => setEditingUser({ ...editingUser, fullName: e.target.value })}
+                  placeholder="Full Name"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1 block">Role</label>
+                <select
+                  value={editingUser.role}
+                  onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="customer">Customer</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1 block">Status</label>
+                <select
+                  value={editingUser.status}
+                  onChange={(e) => setEditingUser({ ...editingUser, status: e.target.value })}
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="active">Active</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <Button type="button" variant="ghost" onClick={() => setEditingUser(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="default" loading={isProcessing}>
+                  Save Changes
+                </Button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

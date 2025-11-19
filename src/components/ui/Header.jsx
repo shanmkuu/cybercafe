@@ -1,4 +1,3 @@
-// ...existing code...
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../AppIcon';
@@ -97,9 +96,7 @@ const Header = ({ userRole = 'admin', userName = 'Administrator', isCollapsed = 
           <div className="h-4 w-px bg-border"></div>
 
           <div className="flex items-center space-x-2">
-            <Icon name="Users" size={16} className="text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Active Sessions:</span>
-            <span className="text-sm font-semibold text-foreground font-mono">24</span>
+            <span className="text-lg font-medium text-foreground">Hello, {userName}</span>
           </div>
         </div>
 
@@ -107,7 +104,7 @@ const Header = ({ userRole = 'admin', userName = 'Administrator', isCollapsed = 
         <div className="flex items-center space-x-4">
           <div className="hidden sm:block text-right">
             <p className="text-sm font-medium text-foreground">{getGreeting()}</p>
-            <p className="text-xs text-muted-foreground">{userName}</p>
+            <p className="text-xs text-muted-foreground capitalize">{userRole} Account</p>
           </div>
 
           <div className="relative">
@@ -129,21 +126,21 @@ const Header = ({ userRole = 'admin', userName = 'Administrator', isCollapsed = 
                   <p className="text-sm font-medium text-popover-foreground">{userName}</p>
                   <p className="text-xs text-muted-foreground capitalize">{userRole} Account</p>
                 </div>
-                
+
                 <div className="p-1">
                   <button className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-popover-foreground hover:bg-muted rounded-md transition-colors">
                     <Icon name="Settings" size={16} />
                     <span>Settings</span>
                   </button>
-                  
+
                   <button className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-popover-foreground hover:bg-muted rounded-md transition-colors">
                     <Icon name="HelpCircle" size={16} />
                     <span>Help & Support</span>
                   </button>
-                  
+
                   <div className="h-px bg-border my-1"></div>
-                  
-                  <button 
+
+                  <button
                     onClick={handleLogout}
                     className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-error hover:bg-muted rounded-md transition-colors"
                   >
@@ -161,4 +158,3 @@ const Header = ({ userRole = 'admin', userName = 'Administrator', isCollapsed = 
 };
 
 export default Header;
-// ...existing code...

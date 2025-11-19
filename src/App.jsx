@@ -17,11 +17,7 @@ function App() {
   const [userRole, setUserRole] = useState(null);
   const [sessionStartTime, setSessionStartTime] = useState(null);
 
-  // Demo credentials
-  const demoCredentials = {
-    admin: { email: 'admin@cybercafe.com', password: 'admin123' },
-    customer: { email: 'customer@cybercafe.com', password: 'customer123' }
-  };
+
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -279,14 +275,7 @@ function App() {
                     </button>
                   </form>
 
-                  {/* Demo credentials helper */}
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-blue-700 text-sm font-medium mb-2">Demo Credentials:</p>
-                    <div className="text-xs text-blue-600 space-y-1">
-                      <div><strong>Admin:</strong> admin@cybercafe.com / admin123</div>
-                      <div><strong>Customer:</strong> customer@cybercafe.com / customer123</div>
-                    </div>
-                  </div>
+
 
                   <div className="mt-6 text-center">
                     <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
