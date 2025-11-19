@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Header from '../../components/ui/Header';
 import ErrorBoundaryNavigation from '../../components/ui/ErrorBoundaryNavigation';
+import { getUserFiles, createSession, endSession, logFileActivity } from '../../lib/db';
+import { downloadFile } from '../../lib/storage';
 
 // Import components
 import SessionTimer from './components/SessionTimer';
@@ -22,6 +25,18 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [showUploadInterface, setShowUploadInterface] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [files, setFiles] = useState([]);
+  const [userEmail, setUserEmail] = useState('');
+  const [userId, setUserId] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Initialize sessionStartTime from localStorage or default to now if not present
+  // This ensures the timer starts immediately even before DB confirmation
+  const [sessionStartTime, setSessionStartTime] = useState(() => {
+    const stored = localStorage.getItem('sessionStartTime');
+    return stored ? new Date(stored) : new Date();
+  });
+  const [sessionId, setSessionId] = useState(() => localStorage.getItem('sessionId'));
 
   useEffect(() => {
     // Redirect if not authenticated or not a customer
@@ -29,6 +44,45 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
       navigate('/authentication-portal');
       return;
     }
+
+    // Get user email and ID
+    const email = localStorage.getItem('userEmail');
+    setUserEmail(email);
+
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+      }
+    };
+    getUser();
+
+    // Handle Session
+    const initSession = async () => {
+      // Need user ID for session creation now
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!sessionId && user) {
+        // Create new session if one doesn't exist
+        try {
+          console.log('Creating new session for', user.id);
+          const { data, error } = await createSession(user.id, 'WS-007'); // Default workstation ID
+          if (data && !error) {
+            console.log('Session created:', data);
+            setSessionId(data.id);
+            setSessionStartTime(new Date(data.start_time));
+            localStorage.setItem('sessionId', data.id);
+            localStorage.setItem('sessionStartTime', data.start_time);
+          } else {
+            console.error('Failed to create session:', error);
+          }
+        } catch (err) {
+          console.error('Session creation error:', err);
+        }
+      }
+    };
+
+    initSession();
 
     // Update current time every second
     const timer = setInterval(() => {
@@ -38,27 +92,70 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
     return () => clearInterval(timer);
   }, [isAuthenticated, userRole, navigate]);
 
-  const handleFileUpload = async (file) => {
-    setIsUploading(true);
-    try {
-      // Simulate upload process
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      console.log('File uploaded:', file?.name);
-    } catch (error) {
-      console.error('Upload failed:', error);
-    } finally {
-      setIsUploading(false);
+  const fetchFiles = async () => {
+    if (!userId) return;
+
+    setIsLoading(true);
+    const { data, error } = await getUserFiles(userId);
+    if (error) {
+      console.error('Error fetching files:', error);
+    } else {
+      setFiles(data || []);
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    if (userId) {
+      fetchFiles();
+    }
+  }, [userId]);
+
+  const handleFileUpload = async (file, fileData) => {
+    // Refresh file list after upload
+    if (userId) {
+      fetchFiles();
     }
   };
 
-  const handleQuickAction = (actionId) => {
+  const handleQuickAction = async (actionId) => {
     switch (actionId) {
       case 'upload':
         setShowUploadInterface(true);
+        // Scroll to upload section
+        setTimeout(() => {
+          document.getElementById('upload-section')?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
         break;
       case 'download':
         if (selectedFiles?.length > 0) {
-          console.log('Downloading files:', selectedFiles);
+          // Download each selected file
+          for (const file of selectedFiles) {
+            try {
+              const { data, error } = await downloadFile('user_uploads', file.path);
+              if (data) {
+                // Create a download link
+                const url = URL.createObjectURL(data);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name;
+                document.body.appendChild(a);
+                a.click();
+                URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                // Log activity
+                if (userId) {
+                  await logFileActivity(userId, file.name, 'download');
+                }
+              } else {
+                console.error('Error downloading file:', error);
+                alert(`Failed to download ${file.name}`);
+              }
+            } catch (err) {
+              console.error('Download exception:', err);
+            }
+          }
         } else {
           alert('Please select files to download');
         }
@@ -82,14 +179,24 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
     // In a real app, this would call the backend API
   };
 
-  const handleEndSession = () => {
+  const handleEndSession = async () => {
     if (confirm('Are you sure you want to end your session?')) {
+      if (sessionId) {
+        await endSession(sessionId);
+        localStorage.removeItem('sessionId');
+        localStorage.removeItem('sessionStartTime');
+      }
       onLogout?.();
     }
   };
 
-  const handleLogoutClick = () => {
+  const handleLogoutClick = async () => {
     if (confirm('Are you sure you want to sign out?')) {
+      if (sessionId) {
+        await endSession(sessionId);
+        localStorage.removeItem('sessionId');
+        localStorage.removeItem('sessionStartTime');
+      }
       onLogout?.();
     }
   };
@@ -102,11 +209,11 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
     <ErrorBoundaryNavigation userRole={userRole}>
       <div className="min-h-screen bg-background">
         {/* Header */}
-        <Header 
+        <Header
           userRole={userRole}
           userName="John Customer"
           onLogout={handleLogoutClick}
-          onToggleSidebar={() => {}}
+          onToggleSidebar={() => { }}
         />
 
         {/* Main Content */}
@@ -123,7 +230,7 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
                     Manage your files, track your session, and stay productive
                   </p>
                 </div>
-                
+
                 <div className="flex items-center space-x-4">
                   <div className="text-right">
                     <div className="text-sm text-muted-foreground">Current Time</div>
@@ -131,7 +238,7 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
                       {currentTime?.toLocaleTimeString()}
                     </div>
                   </div>
-                  
+
                   <Button
                     variant="outline"
                     onClick={() => setShowUploadInterface(!showUploadInterface)}
@@ -146,10 +253,12 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
 
             {/* Upload Interface */}
             {showUploadInterface && (
-              <div className="mb-6">
-                <UploadInterface 
+              <div className="mb-6" id="upload-section">
+                <UploadInterface
                   onUpload={handleFileUpload}
                   isUploading={isUploading}
+                  userEmail={userEmail}
+                  userId={userId}
                 />
               </div>
             )}
@@ -160,6 +269,7 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
               <div className="col-span-12 lg:col-span-3 space-y-6">
                 {/* Session Timer */}
                 <SessionTimer
+                  sessionStartTime={sessionStartTime}
                   onExtendSession={handleExtendSession}
                   onEndSession={handleEndSession}
                 />
@@ -195,6 +305,8 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
                     selectedFolder={selectedFolder}
                     onFileSelect={setSelectedFiles}
                     selectedFiles={selectedFiles}
+                    files={files}
+                    userEmail={userEmail}
                   />
                 </div>
               </div>
@@ -213,7 +325,7 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
                 <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-2">
                   <Icon name="Files" size={24} className="text-primary" />
                 </div>
-                <div className="text-2xl font-bold text-foreground">127</div>
+                <div className="text-2xl font-bold text-foreground">{files.length}</div>
                 <div className="text-sm text-muted-foreground">Total Files</div>
               </div>
 
@@ -221,7 +333,9 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
                 <div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center mx-auto mb-2">
                   <Icon name="HardDrive" size={24} className="text-accent" />
                 </div>
-                <div className="text-2xl font-bold text-foreground">2.4 GB</div>
+                <div className="text-2xl font-bold text-foreground">
+                  {(files.reduce((acc, file) => acc + (file.size || 0), 0) / (1024 * 1024)).toFixed(2)} MB
+                </div>
                 <div className="text-sm text-muted-foreground">Storage Used</div>
               </div>
 
@@ -229,7 +343,9 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
                 <div className="w-12 h-12 bg-success/10 rounded-lg flex items-center justify-center mx-auto mb-2">
                   <Icon name="Upload" size={24} className="text-success" />
                 </div>
-                <div className="text-2xl font-bold text-foreground">23</div>
+                <div className="text-2xl font-bold text-foreground">
+                  {files.filter(f => new Date(f.created_at).toDateString() === new Date().toDateString()).length}
+                </div>
                 <div className="text-sm text-muted-foreground">Files Uploaded Today</div>
               </div>
 
@@ -237,38 +353,12 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
                 <div className="w-12 h-12 bg-warning/10 rounded-lg flex items-center justify-center mx-auto mb-2">
                   <Icon name="Clock" size={24} className="text-warning" />
                 </div>
-                <div className="text-2xl font-bold text-foreground">1h 45m</div>
-                <div className="text-sm text-muted-foreground">Session Time</div>
+                <div className="text-2xl font-bold text-foreground">Active</div>
+                <div className="text-sm text-muted-foreground">Session Status</div>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Footer */}
-        <footer className="mt-12 border-t border-border bg-card">
-          <div className="max-w-7xl mx-auto px-6 py-8">
-            <div className="flex flex-col md:flex-row items-center justify-between">
-              <div className="flex items-center space-x-3 mb-4 md:mb-0">
-                <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
-                  <Icon name="Shield" size={20} color="white" />
-                </div>
-                <div>
-                  <div className="font-semibold text-card-foreground">CyberCafe Tracker</div>
-                  <div className="text-xs text-muted-foreground">Customer Workspace</div>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-6 text-sm text-muted-foreground">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 rounded-full bg-success status-pulse"></div>
-                  <span>System Online</span>
-                </div>
-                <div>Workstation: WS-007</div>
-                <div>&copy; {new Date()?.getFullYear()} CyberCafe Tracker</div>
-              </div>
-            </div>
-          </div>
-        </footer>
       </div>
     </ErrorBoundaryNavigation>
   );

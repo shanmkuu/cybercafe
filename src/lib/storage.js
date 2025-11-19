@@ -39,3 +39,31 @@ export async function deleteFile(bucket, path) {
     return { data: null, error };
   }
 }
+
+export async function ensureBucketExists(bucket) {
+  try {
+    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+
+    if (listError) throw listError;
+
+    const bucketExists = buckets.some(b => b.name === bucket);
+
+    if (!bucketExists) {
+      console.log(`Bucket '${bucket}' not found. Attempting to create...`);
+      const { data, error: createError } = await supabase.storage.createBucket(bucket, {
+        public: false, // Private bucket by default
+        fileSizeLimit: 52428800, // 50MB
+        allowedMimeTypes: null // Allow all types
+      });
+
+      if (createError) throw createError;
+      console.log(`Bucket '${bucket}' created successfully.`);
+      return { data, error: null };
+    }
+
+    return { data: { message: 'Bucket exists' }, error: null };
+  } catch (error) {
+    console.error('ensureBucketExists error', error);
+    return { data: null, error };
+  }
+}

@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const SessionTimer = ({ 
+const SessionTimer = ({
   sessionStartTime = new Date(Date.now() - 3600000), // 1 hour ago
   remainingCredit = 120, // minutes
   workstationId = "WS-007",
   onExtendSession,
-  onEndSession 
+  onEndSession
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showExtendModal, setShowExtendModal] = useState(false);
@@ -66,7 +66,7 @@ const SessionTimer = ({
           </div>
           <div className="text-xs text-muted-foreground mt-1">Elapsed Time</div>
         </div>
-        
+
         <div className="text-center p-3 bg-muted rounded-lg">
           <div className={`text-2xl font-mono font-bold ${statusColor}`}>
             {String(remaining?.hours)?.padStart(2, '0')}:{String(remaining?.minutes)?.padStart(2, '0')}
@@ -85,7 +85,7 @@ const SessionTimer = ({
         >
           Extend
         </Button>
-        
+
         <Button
           variant="destructive"
           size="sm"
@@ -101,7 +101,7 @@ const SessionTimer = ({
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-200">
           <div className="bg-card rounded-lg p-6 w-full max-w-md mx-4">
             <h3 className="text-lg font-semibold text-card-foreground mb-4">Extend Session</h3>
-            
+
             <div className="space-y-3 mb-6">
               {[15, 30, 60, 120]?.map(minutes => (
                 <button

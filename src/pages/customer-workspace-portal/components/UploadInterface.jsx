@@ -1,13 +1,19 @@
 import React, { useState, useRef } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
-import { uploadFile } from '../../../lib/storage';
+import { uploadFile, ensureBucketExists } from '../../../lib/storage';
+import { saveFileRecord, logFileActivity } from '../../../lib/db';
+import { supabase } from '../../../lib/supabase';
 
-const UploadInterface = ({ onUpload, isUploading = false }) => {
+const UploadInterface = ({ onUpload, isUploading: externalIsUploading, userEmail, userId }) => {
+  const fileInputRef = useRef(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploadQueue, setUploadQueue] = useState([]);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const fileInputRef = useRef(null);
+  const [internalIsUploading, setInternalIsUploading] = useState(false);
+  const [lastError, setLastError] = useState(null);
+
+  const isUploading = externalIsUploading || internalIsUploading;
 
   const allowedTypes = {
     'image/*': ['jpg', 'jpeg', 'png', 'gif', 'webp'],
@@ -38,7 +44,7 @@ const UploadInterface = ({ onUpload, isUploading = false }) => {
     e?.preventDefault();
     e?.stopPropagation();
     setDragActive(false);
-    
+
     if (e?.dataTransfer?.files && e?.dataTransfer?.files?.[0]) {
       handleFiles(Array.from(e?.dataTransfer?.files));
     }
@@ -63,7 +69,7 @@ const UploadInterface = ({ onUpload, isUploading = false }) => {
 
       // Check file type
       const fileExtension = file?.name?.split('.')?.pop()?.toLowerCase();
-      const isValidType = Object.values(allowedTypes)?.some(extensions => 
+      const isValidType = Object.values(allowedTypes)?.some(extensions =>
         extensions?.includes(fileExtension)
       );
 
@@ -87,71 +93,115 @@ const UploadInterface = ({ onUpload, isUploading = false }) => {
       alert('Upload errors:\n' + errors?.join('\n'));
     }
 
-    if (validFiles?.length > 0) {
+    if (validFiles.length > 0) {
       setUploadQueue(prev => [...prev, ...validFiles]);
       setShowUploadModal(true);
     }
   };
 
-  const startUpload = async () => {
-    const pendingFiles = uploadQueue?.filter(f => f?.status === 'pending');
-    if (!pendingFiles || pendingFiles.length === 0) return;
-
-    // Mark overall uploading state
-    setUploadQueue(prev => prev?.map(f => f?.status === 'pending' ? { ...f, status: 'queued' } : f));
-
-    for (const fileItem of pendingFiles) {
-      // start optimistic progress animation
-      setUploadQueue(prev => prev?.map(f => 
-        f?.id === fileItem?.id ? { ...f, status: 'uploading', progress: 5 } : f
-      ));
-
-      let progress = 5;
-      const ticker = setInterval(() => {
-        progress = Math.min(90, progress + Math.floor(Math.random() * 10) + 5);
-        setUploadQueue(prev => prev?.map(f => 
-          f?.id === fileItem?.id ? { ...f, progress } : f
-        ));
-      }, 300);
-
-      try {
-        // Build a safe path. Assumption: a bucket named 'uploads' exists. Adjust as needed.
-  const safeName = `${Date.now()}_${(fileItem?.name || '').replace(/[^a-zA-Z0-9_.-]/g, '_')}`;
-        const path = `uploads/${safeName}`;
-
-        const { data, error } = await uploadFile('uploads', path, fileItem?.file);
-        clearInterval(ticker);
-
-        if (error) {
-          setUploadQueue(prev => prev?.map(f => 
-            f?.id === fileItem?.id ? { ...f, status: 'error', error: error?.message || String(error) } : f
-          ));
-          continue;
-        }
-
-        // finalize progress
-        setUploadQueue(prev => prev?.map(f => 
-          f?.id === fileItem?.id ? { ...f, status: 'completed', progress: 100, uploaded: data } : f
-        ));
-
-        // notify parent with upload result (file and storage data)
-        // Call parent handler with original File as first arg and storage response as second arg
-        onUpload?.(fileItem?.file, data);
-      } catch (err) {
-        clearInterval(ticker);
-        setUploadQueue(prev => prev?.map(f => 
-          f?.id === fileItem?.id ? { ...f, status: 'error', error: err?.message || String(err) } : f
-        ));
-      }
-    }
-  };
-
-  const removeFromQueue = (fileId) => {
-    setUploadQueue(prev => prev?.filter(f => f?.id !== fileId));
+  const removeFromQueue = (id) => {
+    setUploadQueue(prev => prev?.filter(f => f?.id !== id));
   };
 
   const clearCompleted = () => {
     setUploadQueue(prev => prev?.filter(f => f?.status !== 'completed'));
+  };
+
+  const startUpload = async () => {
+    let currentUserId = userId;
+
+    // Fallback: Try to fetch user if not provided via props
+    if (!currentUserId) {
+      console.log('UserId prop missing, attempting to fetch from Supabase...');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        currentUserId = user.id;
+        console.log('Fetched user ID:', currentUserId);
+      }
+    }
+
+    if (!userEmail || !currentUserId) {
+      console.error('Missing user info:', { userEmail, currentUserId });
+      alert(`User information is missing (Email: ${userEmail ? 'OK' : 'Missing'}, ID: ${currentUserId ? 'OK' : 'Missing'}). Please ensure you are logged in.`);
+      return;
+    }
+
+    setInternalIsUploading(true);
+    setLastError(null);
+
+    // Ensure bucket exists before starting
+    try {
+      const { error: bucketError } = await ensureBucketExists('user_uploads');
+      if (bucketError) {
+        console.error('Failed to ensure bucket exists:', bucketError);
+      }
+    } catch (err) {
+      console.warn('Bucket check failed, proceeding to upload attempt:', err);
+    }
+
+    const pendingFiles = uploadQueue.filter(f => f.status === 'pending');
+
+    for (const fileItem of pendingFiles) {
+      // Update status to uploading
+      setUploadQueue(prev => prev.map(f =>
+        f.id === fileItem.id ? { ...f, status: 'uploading', progress: 0 } : f
+      ));
+
+      try {
+        // 1. Upload to Storage
+        // Use userId as the folder name to match RLS policy
+        const path = `${currentUserId}/${Date.now()}_${fileItem.name}`;
+        console.log('Uploading file to:', path);
+
+        const { data: uploadData, error: uploadError } = await uploadFile('user_uploads', path, fileItem.file);
+
+        if (uploadError) {
+          console.error('Storage upload error:', uploadError);
+          throw new Error(`Storage Error: ${uploadError.message}`);
+        }
+
+        // Update progress (simulated as we don't have real progress callback from simple upload)
+        setUploadQueue(prev => prev.map(f =>
+          f.id === fileItem.id ? { ...f, progress: 50 } : f
+        ));
+
+        // 2. Save Metadata to DB
+        const fileMetadata = {
+          name: fileItem.name,
+          size: fileItem.size,
+          type: fileItem.type,
+          path: path,
+          // user_email removed, user_id will be handled by default or RLS
+          created_at: new Date().toISOString()
+        };
+
+        const { error: dbError } = await saveFileRecord(fileMetadata);
+        if (dbError) {
+          console.error('Database save error:', dbError);
+          throw new Error(`Database Error: ${dbError.message}`);
+        }
+
+        // 3. Log Activity
+        await logFileActivity(currentUserId, fileItem.name, 'upload');
+
+        // Update status to completed
+        setUploadQueue(prev => prev.map(f =>
+          f.id === fileItem.id ? { ...f, status: 'completed', progress: 100 } : f
+        ));
+
+      } catch (error) {
+        console.error('Upload failed for', fileItem.name, error);
+        const errorMessage = error.message || 'Unknown error';
+        setLastError(errorMessage);
+        setUploadQueue(prev => prev.map(f =>
+          f.id === fileItem.id ? { ...f, status: 'error' } : f
+        ));
+        alert(`Upload Failed: ${errorMessage}`);
+      }
+    }
+
+    setInternalIsUploading(false);
+    if (onUpload) onUpload();
   };
 
   const formatFileSize = (bytes) => {
@@ -186,10 +236,9 @@ const UploadInterface = ({ onUpload, isUploading = false }) => {
     <div className="space-y-4">
       {/* Upload Drop Zone */}
       <div
-        className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-all ${
-          dragActive 
-            ? 'border-primary bg-primary/5' :'border-border hover:border-primary/50 hover:bg-muted'
-        }`}
+        className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-all ${dragActive
+          ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted'
+          }`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
@@ -203,12 +252,12 @@ const UploadInterface = ({ onUpload, isUploading = false }) => {
           accept={Object.keys(allowedTypes)?.join(',')}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         />
-        
+
         <div className="space-y-4">
           <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto">
             <Icon name="Upload" size={32} className="text-primary" />
           </div>
-          
+
           <div>
             <h3 className="text-lg font-semibold text-foreground mb-2">
               Drop files here or click to browse
@@ -265,12 +314,12 @@ const UploadInterface = ({ onUpload, isUploading = false }) => {
               <div className="space-y-3">
                 {uploadQueue?.map(fileItem => (
                   <div key={fileItem?.id} className="flex items-center space-x-3 p-3 bg-muted rounded-lg">
-                    <Icon 
-                      name={getStatusIcon(fileItem?.status)} 
-                      size={20} 
-                      className={getStatusColor(fileItem?.status)} 
+                    <Icon
+                      name={getStatusIcon(fileItem?.status)}
+                      size={20}
+                      className={getStatusColor(fileItem?.status)}
                     />
-                    
+
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-foreground truncate">
                         {fileItem?.name}
@@ -278,10 +327,10 @@ const UploadInterface = ({ onUpload, isUploading = false }) => {
                       <div className="text-xs text-muted-foreground">
                         {formatFileSize(fileItem?.size)}
                       </div>
-                      
+
                       {fileItem?.status === 'uploading' && (
                         <div className="w-full bg-background rounded-full h-1.5 mt-2">
-                          <div 
+                          <div
                             className="bg-primary h-1.5 rounded-full transition-all duration-300"
                             style={{ width: `${fileItem?.progress}%` }}
                           ></div>
@@ -308,36 +357,31 @@ const UploadInterface = ({ onUpload, isUploading = false }) => {
               </div>
             </div>
 
-            <div className="p-6 border-t border-border">
-              <div className="flex items-center justify-between">
+            <div className="p-6 border-t border-border bg-muted/50">
+              <div className="flex justify-between items-center">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   onClick={clearCompleted}
-                  disabled={!uploadQueue?.some(f => f?.status === 'completed')}
+                  disabled={!uploadQueue.some(f => f.status === 'completed')}
                 >
                   Clear Completed
                 </Button>
-                
-                <div className="flex space-x-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowUploadModal(false)}
-                  >
-                    Close
-                  </Button>
-                  
-                  <Button
-                    variant="default"
-                    onClick={startUpload}
-                    disabled={!uploadQueue?.some(f => f?.status === 'pending') || isUploading}
-                    loading={isUploading}
-                    iconName="Upload"
-                    iconPosition="left"
-                  >
-                    Start Upload
-                  </Button>
-                </div>
+                <Button
+                  variant="default"
+                  onClick={startUpload}
+                  disabled={internalIsUploading || !uploadQueue.some(f => f.status === 'pending')}
+                  isLoading={internalIsUploading}
+                  iconName="Upload"
+                  iconPosition="left"
+                >
+                  {internalIsUploading ? 'Uploading...' : 'Start Upload'}
+                </Button>
               </div>
+              {lastError && (
+                <div className="mt-4 p-3 bg-error/10 text-error text-sm rounded-md">
+                  {lastError}
+                </div>
+              )}
             </div>
           </div>
         </div>
