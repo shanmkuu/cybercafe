@@ -1,47 +1,45 @@
 import React, { useState } from 'react';
 import Icon from '../../../components/AppIcon';
 
-const WorkstationStatusTree = () => {
+const WorkstationStatusTree = ({ workstations }) => {
   const [expandedSections, setExpandedSections] = useState(['floor-1', 'floor-2']);
 
-  const workstationData = [
+  // Process flat workstation list into sections if provided, otherwise use default structure or empty
+  const workstationData = workstations ? (() => {
+    const sections = {};
+    workstations.forEach(ws => {
+      if (!sections[ws.section_id]) {
+        sections[ws.section_id] = {
+          id: ws.section_id,
+          name: ws.section_id === 'floor-1' ? 'Floor 1 - Main Area' :
+            ws.section_id === 'floor-2' ? 'Floor 2 - Gaming Zone' :
+              'Private Rooms', // Simple mapping for now
+          type: 'section',
+          workstations: []
+        };
+      }
+      sections[ws.section_id].workstations.push({
+        id: ws.id,
+        name: ws.name,
+        status: ws.status,
+        user: ws.sessions?.user_id ? 'Occupied' : null, // We might need to fetch user name separately or join
+        ip: ws.ip_address,
+        session: ws.sessions ? new Date(ws.sessions.start_time).toLocaleTimeString() : null
+      });
+    });
+    return Object.values(sections);
+  })() : [
     {
       id: 'floor-1',
       name: 'Floor 1 - Main Area',
       type: 'section',
-      workstations: [
-        { id: 'ws-001', name: 'Workstation 001', status: 'occupied', user: 'John Smith', ip: '192.168.1.101', session: '2h 15m' },
-        { id: 'ws-002', name: 'Workstation 002', status: 'available', user: null, ip: '192.168.1.102', session: null },
-        { id: 'ws-003', name: 'Workstation 003', status: 'occupied', user: 'Sarah Johnson', ip: '192.168.1.103', session: '45m' },
-        { id: 'ws-004', name: 'Workstation 004', status: 'maintenance', user: null, ip: '192.168.1.104', session: null },
-        { id: 'ws-005', name: 'Workstation 005', status: 'occupied', user: 'Mike Davis', ip: '192.168.1.105', session: '1h 30m' }
-      ]
-    },
-    {
-      id: 'floor-2',
-      name: 'Floor 2 - Gaming Zone',
-      type: 'section',
-      workstations: [
-        { id: 'ws-201', name: 'Gaming Station 201', status: 'occupied', user: 'Alex Chen', ip: '192.168.2.101', session: '3h 22m' },
-        { id: 'ws-202', name: 'Gaming Station 202', status: 'available', user: null, ip: '192.168.2.102', session: null },
-        { id: 'ws-203', name: 'Gaming Station 203', status: 'occupied', user: 'Emma Wilson', ip: '192.168.2.103', session: '1h 05m' },
-        { id: 'ws-204', name: 'Gaming Station 204', status: 'available', user: null, ip: '192.168.2.104', session: null }
-      ]
-    },
-    {
-      id: 'private-rooms',
-      name: 'Private Rooms',
-      type: 'section',
-      workstations: [
-        { id: 'pr-001', name: 'Private Room A', status: 'occupied', user: 'David Brown', ip: '192.168.3.101', session: '4h 10m' },
-        { id: 'pr-002', name: 'Private Room B', status: 'available', user: null, ip: '192.168.3.102', session: null }
-      ]
+      workstations: []
     }
   ];
 
   const toggleSection = (sectionId) => {
-    setExpandedSections(prev => 
-      prev?.includes(sectionId) 
+    setExpandedSections(prev =>
+      prev?.includes(sectionId)
         ? prev?.filter(id => id !== sectionId)
         : [...prev, sectionId]
     );
@@ -90,10 +88,10 @@ const WorkstationStatusTree = () => {
               className="w-full flex items-center justify-between p-3 hover:bg-muted transition-colors"
             >
               <div className="flex items-center space-x-2">
-                <Icon 
-                  name={expandedSections?.includes(section?.id) ? 'ChevronDown' : 'ChevronRight'} 
-                  size={16} 
-                  className="text-muted-foreground" 
+                <Icon
+                  name={expandedSections?.includes(section?.id) ? 'ChevronDown' : 'ChevronRight'}
+                  size={16}
+                  className="text-muted-foreground"
                 />
                 <span className="font-medium text-foreground">{section?.name}</span>
               </div>

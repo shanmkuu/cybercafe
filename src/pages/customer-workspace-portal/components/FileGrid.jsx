@@ -3,7 +3,7 @@ import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import Image from '../../../components/AppImage';
 
-const FileGrid = ({ selectedFolder = 'documents', onFileSelect, selectedFiles = [], files = [], onDownload }) => {
+const FileGrid = ({ selectedFolder = 'documents', onFileSelect, selectedFiles = [], files = [], onDownload, onDelete }) => {
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const [sortBy, setSortBy] = useState('name'); // 'name', 'date', 'size', 'type'
 
@@ -120,7 +120,9 @@ const FileGrid = ({ selectedFolder = 'documents', onFileSelect, selectedFiles = 
                 variant="destructive"
                 size="sm"
                 iconName="Trash2"
-                iconPosition="left">
+                iconPosition="left"
+                onClick={() => onDelete?.(selectedFiles)}
+              >
                 Delete
               </Button>
             </div>

@@ -3,93 +3,39 @@ import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 
-const UserManagementTable = () => {
+const UserManagementTable = ({ users }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [filterRole, setFilterRole] = useState('all');
   const [showAddUser, setShowAddUser] = useState(false);
 
-  const usersData = [
-  {
-    id: 'usr-001',
-    username: 'john.smith',
-    fullName: 'John Smith',
-    email: 'john.smith@email.com',
-    role: 'customer',
-    status: 'active',
-    lastLogin: '2025-10-28 15:30:22',
-    totalSessions: 45,
-    filesUploaded: 23,
-    avatar: "https://images.unsplash.com/photo-1641479160067-5ae7bde244b0",
-    avatarAlt: 'Professional headshot of young man with brown hair in casual shirt'
-  },
-  {
-    id: 'usr-002',
-    username: 'sarah.johnson',
-    fullName: 'Sarah Johnson',
-    email: 'sarah.johnson@email.com',
-    role: 'customer',
-    status: 'active',
-    lastLogin: '2025-10-28 16:45:10',
-    totalSessions: 67,
-    filesUploaded: 89,
-    avatar: "https://images.unsplash.com/photo-1684262855358-88f296a2cfc2",
-    avatarAlt: 'Professional woman with blonde hair in white blazer smiling at camera'
-  },
-  {
-    id: 'usr-003',
-    username: 'mike.davis',
-    fullName: 'Mike Davis',
-    email: 'mike.davis@email.com',
-    role: 'customer',
-    status: 'suspended',
-    lastLogin: '2025-10-26 09:15:33',
-    totalSessions: 12,
-    filesUploaded: 5,
-    avatar: "https://images.unsplash.com/photo-1597945310606-a54b1774e175",
-    avatarAlt: 'Young professional man with dark hair in navy suit jacket'
-  },
-  {
-    id: 'usr-004',
-    username: 'emma.wilson',
-    fullName: 'Emma Wilson',
-    email: 'emma.wilson@email.com',
-    role: 'admin',
-    status: 'active',
-    lastLogin: '2025-10-28 17:20:45',
-    totalSessions: 156,
-    filesUploaded: 234,
-    avatar: "https://images.unsplash.com/photo-1654463313333-3bccfaee8430",
-    avatarAlt: 'Professional woman with curly brown hair in business attire'
-  },
-  {
-    id: 'usr-005',
-    username: 'alex.chen',
-    fullName: 'Alex Chen',
-    email: 'alex.chen@email.com',
-    role: 'customer',
-    status: 'active',
-    lastLogin: '2025-10-28 14:22:18',
-    totalSessions: 89,
-    filesUploaded: 145,
-    avatar: "https://images.unsplash.com/photo-1698072556534-40ec6e337311",
-    avatarAlt: 'Asian man with glasses and black hair in casual button-up shirt'
-  }];
-
+  const usersData = users ? users.map(user => ({
+    id: user.id,
+    username: user.username || user.email,
+    fullName: user.full_name || 'Unknown',
+    email: user.email || '',
+    role: user.role || 'customer',
+    status: user.status || 'active',
+    lastLogin: user.last_login || null,
+    totalSessions: 0, // Need to fetch or join
+    filesUploaded: 0, // Need to fetch or join
+    avatar: user.avatar_url || "https://via.placeholder.com/150",
+    avatarAlt: user.full_name
+  })) : [];
 
   const filteredUsers = usersData?.filter((user) => {
     const matchesSearch = user?.fullName?.toLowerCase()?.includes(searchTerm?.toLowerCase()) ||
-    user?.username?.toLowerCase()?.includes(searchTerm?.toLowerCase()) ||
-    user?.email?.toLowerCase()?.includes(searchTerm?.toLowerCase());
+      user?.username?.toLowerCase()?.includes(searchTerm?.toLowerCase()) ||
+      user?.email?.toLowerCase()?.includes(searchTerm?.toLowerCase());
     const matchesRole = filterRole === 'all' || user?.role === filterRole;
     return matchesSearch && matchesRole;
   });
 
   const handleSelectUser = (userId) => {
     setSelectedUsers((prev) =>
-    prev?.includes(userId) ?
-    prev?.filter((id) => id !== userId) :
-    [...prev, userId]
+      prev?.includes(userId) ?
+        prev?.filter((id) => id !== userId) :
+        [...prev, userId]
     );
   };
 
@@ -130,7 +76,7 @@ const UserManagementTable = () => {
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-foreground">User Management</h3>
         <div className="flex items-center space-x-2">
-         
+
         </div>
       </div>
       {/* Search and Filter Controls */}
@@ -155,7 +101,7 @@ const UserManagementTable = () => {
       </div>
       {/* Bulk Actions */}
       {selectedUsers?.length > 0 &&
-      <div className="flex items-center justify-between p-3 bg-muted rounded-lg mb-4">
+        <div className="flex items-center justify-between p-3 bg-muted rounded-lg mb-4">
           <span className="text-sm text-foreground">
             {selectedUsers?.length} user{selectedUsers?.length > 1 ? 's' : ''} selected
           </span>
@@ -196,21 +142,21 @@ const UserManagementTable = () => {
           </thead>
           <tbody>
             {filteredUsers?.map((user) =>
-            <tr key={user?.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+              <tr key={user?.id} className="border-b border-border hover:bg-muted/50 transition-colors">
                 <td className="p-3">
                   <input
-                  type="checkbox"
-                  checked={selectedUsers?.includes(user?.id)}
-                  onChange={() => handleSelectUser(user?.id)}
-                  className="rounded border-border" />
+                    type="checkbox"
+                    checked={selectedUsers?.includes(user?.id)}
+                    onChange={() => handleSelectUser(user?.id)}
+                    className="rounded border-border" />
 
                 </td>
                 <td className="p-3">
                   <div className="flex items-center space-x-3">
                     <img
-                    src={user?.avatar}
-                    alt={user?.avatarAlt}
-                    className="w-8 h-8 rounded-full object-cover" />
+                      src={user?.avatar}
+                      alt={user?.avatarAlt}
+                      className="w-8 h-8 rounded-full object-cover" />
 
                     <div>
                       <div className="font-medium text-foreground">{user?.fullName}</div>
@@ -229,7 +175,7 @@ const UserManagementTable = () => {
                   </span>
                 </td>
                 <td className="p-3 text-sm text-muted-foreground font-mono">
-                  {new Date(user.lastLogin)?.toLocaleDateString()} {new Date(user.lastLogin)?.toLocaleTimeString()}
+                  {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() + ' ' + new Date(user.lastLogin).toLocaleTimeString() : '-'}
                 </td>
                 <td className="p-3 text-sm text-foreground font-mono">
                   {user?.totalSessions}
@@ -250,7 +196,7 @@ const UserManagementTable = () => {
         </table>
       </div>
       {filteredUsers?.length === 0 &&
-      <div className="text-center py-8">
+        <div className="text-center py-8">
           <Icon name="Users" size={48} className="text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">No users found matching your criteria</p>
         </div>

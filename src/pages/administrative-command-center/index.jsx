@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/ui/Header';
 import SystemStatusIndicator from '../../components/ui/SystemStatusIndicator';
@@ -8,9 +8,16 @@ import UserManagementTable from './components/UserManagementTable';
 import ActiveSessionMonitoring from './components/ActiveSessionMonitoring';
 import AnalyticsCharts from './components/AnalyticsCharts';
 import QuickActionToolbar from './components/QuickActionToolbar';
+import { getUsers, getActiveSessions, getWorkstations, getAllSessions, getFileStats } from '../../lib/db';
 
 const AdministrativeCommandCenter = ({ userRole, onLogout, isAuthenticated }) => {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState([]);
+  const [activeSessions, setActiveSessions] = useState([]);
+  const [workstations, setWorkstations] = useState([]);
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [metrics, setMetrics] = useState(null);
 
   useEffect(() => {
     // Redirect if not authenticated or not admin
@@ -20,43 +27,161 @@ const AdministrativeCommandCenter = ({ userRole, onLogout, isAuthenticated }) =>
       return;
     }
 
-    // Set up keyboard shortcuts
-    const handleKeyboardShortcuts = (e) => {
-      if (e?.ctrlKey) {
-        switch (e?.key) {
-          case 'n':
-            e?.preventDefault();
-            console.log('Add new user shortcut');
-            break;
-          case 'f':
-            e?.preventDefault();
-            document.querySelector('input[type="search"]')?.focus();
-            break;
-          case 'r':
-            e?.preventDefault();
-            console.log('System reset shortcut');
-            break;
-          case 'b':
-            e?.preventDefault();
-            console.log('Backup shortcut');
-            break;
-          case 'e':
-            e?.preventDefault();
-            console.log('Export logs shortcut');
-            break;
-          case 'h':
-            e?.preventDefault();
-            console.log('Health check shortcut');
-            break;
-          default:
-            break;
-        }
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [usersResponse, activeSessionsResponse, workstationsResponse, allSessionsResponse, fileStatsResponse] = await Promise.all([
+          getUsers(),
+          getActiveSessions(),
+          getWorkstations(),
+          getAllSessions(7), // Last 7 days for analytics
+          getFileStats()
+        ]);
+
+        const usersData = usersResponse.data || [];
+        const activeSessionsData = activeSessionsResponse.data || [];
+        const allSessionsData = allSessionsResponse.data || [];
+        const fileStatsData = fileStatsResponse.data || [];
+        const workstationsData = workstationsResponse.data || [];
+
+        // Calculate derived stats
+        const activeUserIds = new Set(activeSessionsData.map(s => s.user_id));
+        const userSessionCounts = allSessionsData.reduce((acc, session) => {
+          acc[session.user_id] = (acc[session.user_id] || 0) + 1;
+          return acc;
+        }, {});
+        const userFileCounts = fileStatsData.reduce((acc, file) => {
+          if (file.user_id) {
+            acc[file.user_id] = (acc[file.user_id] || 0) + 1;
+          }
+          return acc;
+        }, {});
+
+        const enrichedUsers = usersData.map(user => {
+          let displayStatus = 'inactive';
+          // If user is suspended in DB, keep that status
+          if (user.status === 'suspended') {
+            displayStatus = 'suspended';
+          } else if (activeUserIds.has(user.id)) {
+            displayStatus = 'active';
+          }
+
+          return {
+            ...user,
+            status: displayStatus,
+            totalSessions: userSessionCounts[user.id] || 0,
+            filesUploaded: userFileCounts[user.id] || 0
+          };
+        });
+
+        setUsers(enrichedUsers);
+        setActiveSessions(activeSessionsData);
+        setWorkstations(workstationsData);
+
+        // Process Analytics Data
+        const processedAnalytics = {
+          sessionTrend: processSessionTrend(allSessionsData),
+          usageTime: processUsageTime(allSessionsData),
+          workstationUtilization: processWorkstationUtilization(workstationsData, allSessionsData),
+          fileActivity: processFileActivity(fileStatsData)
+        };
+        setAnalyticsData(processedAnalytics);
+
+        // Process Metrics Data
+        const processedMetrics = [
+          {
+            id: 'total-users',
+            title: 'Total Users',
+            value: usersData.length,
+            change: '+0', // Placeholder
+            changeType: 'neutral',
+            icon: 'Users',
+            color: 'primary'
+          },
+          {
+            id: 'active-sessions',
+            title: 'Active Sessions',
+            value: activeSessionsData.length,
+            change: '+0', // Placeholder
+            changeType: 'neutral',
+            icon: 'Monitor',
+            color: 'accent'
+          },
+          {
+            id: 'files-uploaded',
+            title: 'Files Uploaded',
+            value: fileStatsData.length,
+            change: '+0', // Placeholder
+            changeType: 'neutral',
+            icon: 'Upload',
+            color: 'success'
+          },
+          {
+            id: 'system-health',
+            title: 'System Health',
+            value: '100%', // Placeholder
+            change: '0%',
+            changeType: 'neutral',
+            icon: 'Activity',
+            color: 'warning'
+          }
+        ];
+        setMetrics(processedMetrics);
+
+      } catch (error) {
+        console.error("Error fetching admin data:", error);
+      } finally {
+        setLoading(false);
       }
     };
 
-    document.addEventListener('keydown', handleKeyboardShortcuts);
-    return () => document.removeEventListener('keydown', handleKeyboardShortcuts);
+    fetchData();
+
+    // Set up polling for real-time updates (every 30 seconds)
+    const intervalId = setInterval(fetchData, 30000);
+
+    return () => clearInterval(intervalId);
+
   }, [isAuthenticated, userRole, navigate]);
+
+  // Helper functions for processing analytics data
+  const processSessionTrend = (sessions) => {
+    // Placeholder logic - would need to group sessions by day
+    return [
+      { day: 'Mon', sessions: 0, revenue: 0 },
+      { day: 'Tue', sessions: 0, revenue: 0 },
+      { day: 'Wed', sessions: 0, revenue: 0 },
+      { day: 'Thu', sessions: 0, revenue: 0 },
+      { day: 'Fri', sessions: 0, revenue: 0 },
+      { day: 'Sat', sessions: 0, revenue: 0 },
+      { day: 'Sun', sessions: 0, revenue: 0 }
+    ];
+  };
+
+  const processUsageTime = (sessions) => {
+    // Placeholder logic
+    return [
+      { hour: '06:00', usage: 0 },
+      { hour: '12:00', usage: 0 },
+      { hour: '18:00', usage: 0 }
+    ];
+  };
+
+  const processWorkstationUtilization = (workstations, sessions) => {
+    // Placeholder logic
+    return [
+      { name: 'Floor 1', value: 50, color: '#16A34A' },
+      { name: 'Available', value: 50, color: '#E5E7EB' }
+    ];
+  };
+
+  const processFileActivity = (files) => {
+    // Placeholder logic
+    return [
+      { type: 'Documents', uploads: files?.length || 0, downloads: 0 }
+    ];
+  };
+
 
   if (!isAuthenticated || userRole !== 'admin') {
     return null;
@@ -64,58 +189,40 @@ const AdministrativeCommandCenter = ({ userRole, onLogout, isAuthenticated }) =>
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Fixed Header */}
-      <Header 
+      <Header
         userRole={userRole}
         userName="Administrator"
         onLogout={onLogout}
-        onToggleSidebar={() => {}}
+        onToggleSidebar={() => { }}
       />
-
-      {/* Main Content Area: reserved space below fixed header; vertical scrolling */}
       <div className="pt-16">
-        {/* Quick Action Toolbar (ensure it can call sign-out) */}
-        <div className="px-6">
-          <QuickActionToolbar onSignOut={onLogout} />
-        </div>
-
-        {/* Dashboard Content: vertical stack, scrolls vertically inside viewport */}
+        <QuickActionToolbar onSignOut={onLogout} />
         <div
           className="p-6"
           style={{ maxHeight: 'calc(100vh - 4rem)', overflowY: 'auto' }}
         >
-          {/* Top Metrics Cards */}
           <div className="mb-6">
-            <MetricsCards />
+            <MetricsCards metrics={metrics} />
           </div>
-
-          {/* Stacked panels (vertical flow on small screens, multi-column on lg) */}
           <div className="flex flex-col gap-6">
             <div className="w-full">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                {/* Left Sidebar - Workstation Status Tree */}
                 <div className="lg:col-span-3">
-                  <WorkstationStatusTree />
+                  <WorkstationStatusTree workstations={workstations} />
                 </div>
-
-                {/* Center - User Management and Active Sessions */}
                 <div className="lg:col-span-6 flex flex-col gap-6">
                   <div>
-                    <UserManagementTable />
+                    <UserManagementTable users={users} />
                   </div>
                   <div>
-                    <ActiveSessionMonitoring />
+                    <ActiveSessionMonitoring sessions={activeSessions} />
                   </div>
                 </div>
-
-                {/* Right Panel - Analytics Charts */}
                 <div className="lg:col-span-3">
-                  <AnalyticsCharts />
+                  <AnalyticsCharts analyticsData={analyticsData} />
                 </div>
               </div>
             </div>
-
-            {/* System Status Footer */}
             <div>
               <SystemStatusIndicator position="dashboard" />
             </div>

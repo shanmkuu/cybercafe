@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const ActiveSessionMonitoring = () => {
+const ActiveSessionMonitoring = ({ sessions }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
 
@@ -14,92 +14,20 @@ const ActiveSessionMonitoring = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const activeSessionsData = [
-  {
-    id: 'session-001',
-    workstation: 'WS-001',
-    user: 'John Smith',
-    username: 'john.smith',
-    startTime: new Date(Date.now() - 8100000), // 2h 15m ago
-    activity: 'Document Editing',
-    filesAccessed: 3,
-    dataTransfer: '245 MB',
-    ipAddress: '192.168.1.101',
-    status: 'active',
-    avatar: "https://images.unsplash.com/photo-1641479160067-5ae7bde244b0",
-    avatarAlt: 'Professional headshot of young man with brown hair in casual shirt'
-  },
-  {
-    id: 'session-002',
-    workstation: 'WS-003',
-    user: 'Sarah Johnson',
-    username: 'sarah.johnson',
-    startTime: new Date(Date.now() - 2700000), // 45m ago
-    activity: 'File Upload',
-    filesAccessed: 8,
-    dataTransfer: '1.2 GB',
-    ipAddress: '192.168.1.103',
-    status: 'active',
-    avatar: "https://images.unsplash.com/photo-1684262855358-88f296a2cfc2",
-    avatarAlt: 'Professional woman with blonde hair in white blazer smiling at camera'
-  },
-  {
-    id: 'session-003',
-    workstation: 'WS-005',
-    user: 'Mike Davis',
-    username: 'mike.davis',
-    startTime: new Date(Date.now() - 5400000), // 1h 30m ago
-    activity: 'Gaming',
-    filesAccessed: 1,
-    dataTransfer: '89 MB',
-    ipAddress: '192.168.1.105',
-    status: 'active',
-    avatar: "https://images.unsplash.com/photo-1597945310606-a54b1774e175",
-    avatarAlt: 'Young professional man with dark hair in navy suit jacket'
-  },
-  {
-    id: 'session-004',
-    workstation: 'GS-201',
-    user: 'Alex Chen',
-    username: 'alex.chen',
-    startTime: new Date(Date.now() - 12120000), // 3h 22m ago
-    activity: 'Gaming Session',
-    filesAccessed: 2,
-    dataTransfer: '456 MB',
-    ipAddress: '192.168.2.101',
-    status: 'active',
-    avatar: "https://images.unsplash.com/photo-1698072556534-40ec6e337311",
-    avatarAlt: 'Asian man with glasses and black hair in casual button-up shirt'
-  },
-  {
-    id: 'session-005',
-    workstation: 'GS-203',
-    user: 'Emma Wilson',
-    username: 'emma.wilson',
-    startTime: new Date(Date.now() - 3900000), // 1h 5m ago
-    activity: 'Web Browsing',
-    filesAccessed: 0,
-    dataTransfer: '12 MB',
-    ipAddress: '192.168.2.103',
-    status: 'idle',
-    avatar: "https://images.unsplash.com/photo-1654463313333-3bccfaee8430",
-    avatarAlt: 'Professional woman with curly brown hair in business attire'
-  },
-  {
-    id: 'session-006',
-    workstation: 'PR-001',
-    user: 'David Brown',
-    username: 'david.brown',
-    startTime: new Date(Date.now() - 14400000), // 4h ago
-    activity: 'Video Editing',
-    filesAccessed: 15,
-    dataTransfer: '3.8 GB',
-    ipAddress: '192.168.3.101',
-    status: 'active',
-    avatar: "https://images.unsplash.com/photo-1713946598186-8e28275719b9",
-    avatarAlt: 'Professional man with beard in dark suit jacket'
-  }];
-
+  const activeSessionsData = sessions ? sessions.map(session => ({
+    id: session.id,
+    workstation: session.workstation_id || 'Unknown', // Need to join or fetch workstation name
+    user: session.profiles?.full_name || 'Guest',
+    username: session.profiles?.username || 'guest',
+    startTime: new Date(session.start_time),
+    activity: 'Active', // Placeholder or infer from logs
+    filesAccessed: 0, // Placeholder
+    dataTransfer: '-', // Placeholder
+    ipAddress: '-', // Placeholder
+    status: session.status,
+    avatar: session.profiles?.avatar_url || "https://via.placeholder.com/150",
+    avatarAlt: session.profiles?.full_name
+  })) : [];
 
   const calculateSessionDuration = (startTime) => {
     const duration = currentTime - startTime;
@@ -228,7 +156,7 @@ const ActiveSessionMonitoring = () => {
         })}
       </div>
       {activeSessionsData?.length === 0 &&
-      <div className="text-center py-8">
+        <div className="text-center py-8">
           <Icon name="Monitor" size={48} className="text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">No active sessions</p>
         </div>

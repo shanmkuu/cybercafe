@@ -133,3 +133,101 @@ export async function getUserActivityLogs(userId) {
         return { data: null, error };
     }
 }
+
+// --- Admin / Dashboard Helpers ---
+
+export async function getUsers() {
+    try {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('getUsers error', error);
+        return { data: null, error };
+    }
+}
+
+export async function getActiveSessions() {
+    try {
+        // Join with profiles to get user details
+        const { data, error } = await supabase
+            .from('sessions')
+            .select(`
+                *,
+                profiles:user_id (full_name, username, avatar_url)
+            `)
+            .eq('status', 'active')
+            .order('start_time', { ascending: false });
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('getActiveSessions error', error);
+        return { data: null, error };
+    }
+}
+
+export async function getAllSessions(days = 7) {
+    try {
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        const { data, error } = await supabase
+            .from('sessions')
+            .select('*')
+            .gte('start_time', startDate.toISOString())
+            .order('start_time', { ascending: true });
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('getAllSessions error', error);
+        return { data: null, error };
+    }
+}
+
+export async function getWorkstations() {
+    try {
+        const { data, error } = await supabase
+            .from('workstations')
+            .select(`
+                *,
+                sessions:current_session_id (
+                    user_id,
+                    start_time
+                )
+            `)
+            .order('id', { ascending: true });
+
+        if (error) throw error;
+
+        // If we have active sessions, we might want to fetch the user names for them
+        // But for now, let's just return the raw data and handle enrichment in the component if needed
+        // Or we could do a deeper join if Supabase supports it easily here. 
+        // Actually, let's try to get the user profile from the session if possible.
+        // A more complex query might be needed, but let's stick to simple for now.
+
+        return { data, error: null };
+    } catch (error) {
+        console.error('getWorkstations error', error);
+        return { data: null, error };
+    }
+}
+
+export async function getFileStats() {
+    try {
+        const { data, error } = await supabase
+            .from('files')
+            .select('id, size, type, created_at, user_id');
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('getFileStats error', error);
+        return { data: null, error };
+    }
+}

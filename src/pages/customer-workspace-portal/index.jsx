@@ -6,8 +6,8 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Header from '../../components/ui/Header';
 import ErrorBoundaryNavigation from '../../components/ui/ErrorBoundaryNavigation';
-import { getUserFiles, createSession, endSession, logFileActivity, getUserActivityLogs } from '../../lib/db';
-import { downloadFile } from '../../lib/storage';
+import { getUserFiles, createSession, endSession, logFileActivity, getUserActivityLogs, deleteFileRecord } from '../../lib/db';
+import { downloadFile, deleteFile } from '../../lib/storage';
 
 // Import components
 import SessionTimer from './components/SessionTimer';
@@ -30,6 +30,15 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
   const [userEmail, setUserEmail] = useState('');
   const [userId, setUserId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const displayName = React.useMemo(() => {
+    if (!userEmail) return 'Customer';
+    const namePart = userEmail.split('@')[0];
+    return namePart
+      .split(/[._]/)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }, [userEmail]);
 
   // Initialize sessionStartTime from localStorage or default to now if not present
   // This ensures the timer starts immediately even before DB confirmation
@@ -164,6 +173,57 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
     }
   };
 
+  const handleDeleteFiles = async (filesToDelete) => {
+    if (!filesToDelete || filesToDelete.length === 0) return;
+
+    if (!confirm(`Are you sure you want to delete ${filesToDelete.length} file(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsLoading(true);
+    let successCount = 0;
+
+    for (const file of filesToDelete) {
+      try {
+        // 1. Delete from Storage
+        const { error: storageError } = await deleteFile('user_uploads', file.path);
+        if (storageError) {
+          console.error('Error deleting from storage:', storageError);
+          // Continue to try DB delete even if storage fails (orphaned record cleanup)
+          // or maybe stop? Let's continue but warn.
+          alert(`Failed to delete ${file.name} from storage: ${storageError.message}`);
+          continue;
+        }
+
+        // 2. Delete from Database
+        const { error: dbError } = await deleteFileRecord(file.id);
+        if (dbError) {
+          console.error('Error deleting from DB:', dbError);
+          alert(`Failed to delete record for ${file.name}`);
+          continue;
+        }
+
+        // 3. Log Activity
+        if (userId) {
+          await logFileActivity(userId, file.name, 'delete');
+        }
+
+        successCount++;
+      } catch (err) {
+        console.error('Delete exception:', err);
+      }
+    }
+
+    if (successCount > 0) {
+      // Refresh lists
+      fetchFiles();
+      fetchActivities();
+      setSelectedFiles([]); // Clear selection
+    }
+
+    setIsLoading(false);
+  };
+
   const handleQuickAction = async (actionId) => {
     switch (actionId) {
       case 'upload':
@@ -227,7 +287,7 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
         {/* Header */}
         <Header
           userRole={userRole}
-          userName="John Customer"
+          userName={displayName}
           onLogout={handleLogoutClick}
           onToggleSidebar={() => { }}
         />
@@ -328,6 +388,7 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
                     files={files}
                     userEmail={userEmail}
                     onDownload={handleDownloadFiles}
+                    onDelete={handleDeleteFiles}
                   />
                 </div>
               </div>

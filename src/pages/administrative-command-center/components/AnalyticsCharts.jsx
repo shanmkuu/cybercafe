@@ -3,45 +3,45 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const AnalyticsCharts = () => {
+const AnalyticsCharts = ({ analyticsData }) => {
   const [selectedChart, setSelectedChart] = useState('sessions');
   const [timeRange, setTimeRange] = useState('7d');
 
-  const sessionTrendData = [
-    { day: 'Mon', sessions: 45, revenue: 225 },
-    { day: 'Tue', sessions: 52, revenue: 260 },
-    { day: 'Wed', sessions: 38, revenue: 190 },
-    { day: 'Thu', sessions: 61, revenue: 305 },
-    { day: 'Fri', sessions: 73, revenue: 365 },
-    { day: 'Sat', sessions: 89, revenue: 445 },
-    { day: 'Sun', sessions: 67, revenue: 335 }
+  const sessionTrendData = analyticsData?.sessionTrend || [
+    { day: 'Mon', sessions: 0, revenue: 0 },
+    { day: 'Tue', sessions: 0, revenue: 0 },
+    { day: 'Wed', sessions: 0, revenue: 0 },
+    { day: 'Thu', sessions: 0, revenue: 0 },
+    { day: 'Fri', sessions: 0, revenue: 0 },
+    { day: 'Sat', sessions: 0, revenue: 0 },
+    { day: 'Sun', sessions: 0, revenue: 0 }
   ];
 
-  const usageTimeData = [
-    { hour: '06:00', usage: 12 },
-    { hour: '08:00', usage: 28 },
-    { hour: '10:00', usage: 45 },
-    { hour: '12:00', usage: 67 },
-    { hour: '14:00', usage: 89 },
-    { hour: '16:00', usage: 92 },
-    { hour: '18:00', usage: 78 },
-    { hour: '20:00', usage: 56 },
-    { hour: '22:00', usage: 34 }
+  const usageTimeData = analyticsData?.usageTime || [
+    { hour: '06:00', usage: 0 },
+    { hour: '08:00', usage: 0 },
+    { hour: '10:00', usage: 0 },
+    { hour: '12:00', usage: 0 },
+    { hour: '14:00', usage: 0 },
+    { hour: '16:00', usage: 0 },
+    { hour: '18:00', usage: 0 },
+    { hour: '20:00', usage: 0 },
+    { hour: '22:00', usage: 0 }
   ];
 
-  const workstationUtilizationData = [
-    { name: 'Floor 1', value: 78, color: '#16A34A' },
-    { name: 'Floor 2 Gaming', value: 92, color: '#0EA5E9' },
-    { name: 'Private Rooms', value: 65, color: '#F59E0B' },
-    { name: 'Available', value: 35, color: '#E5E7EB' }
+  const workstationUtilizationData = analyticsData?.workstationUtilization || [
+    { name: 'Floor 1', value: 0, color: '#16A34A' },
+    { name: 'Floor 2 Gaming', value: 0, color: '#0EA5E9' },
+    { name: 'Private Rooms', value: 0, color: '#F59E0B' },
+    { name: 'Available', value: 100, color: '#E5E7EB' }
   ];
 
-  const fileActivityData = [
-    { type: 'Documents', uploads: 145, downloads: 89 },
-    { type: 'Images', uploads: 234, downloads: 156 },
-    { type: 'Videos', uploads: 67, downloads: 45 },
-    { type: 'Archives', uploads: 89, downloads: 123 },
-    { type: 'Others', uploads: 56, downloads: 78 }
+  const fileActivityData = analyticsData?.fileActivity || [
+    { type: 'Documents', uploads: 0, downloads: 0 },
+    { type: 'Images', uploads: 0, downloads: 0 },
+    { type: 'Videos', uploads: 0, downloads: 0 },
+    { type: 'Archives', uploads: 0, downloads: 0 },
+    { type: 'Others', uploads: 0, downloads: 0 }
   ];
 
   const chartOptions = [
@@ -67,13 +67,13 @@ const AnalyticsCharts = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
               <XAxis dataKey="day" stroke="#64748B" fontSize={12} />
               <YAxis stroke="#64748B" fontSize={12} />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#FFFFFF', 
-                  border: '1px solid #E2E8F0', 
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
                   borderRadius: '8px',
                   fontSize: '12px'
-                }} 
+                }}
               />
               <Bar dataKey="sessions" fill="#16A34A" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -87,18 +87,18 @@ const AnalyticsCharts = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
               <XAxis dataKey="hour" stroke="#64748B" fontSize={12} />
               <YAxis stroke="#64748B" fontSize={12} />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#FFFFFF', 
-                  border: '1px solid #E2E8F0', 
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
                   borderRadius: '8px',
                   fontSize: '12px'
-                }} 
+                }}
               />
-              <Line 
-                type="monotone" 
-                dataKey="usage" 
-                stroke="#0EA5E9" 
+              <Line
+                type="monotone"
+                dataKey="usage"
+                stroke="#0EA5E9"
                 strokeWidth={3}
                 dot={{ fill: '#0EA5E9', strokeWidth: 2, r: 4 }}
               />
@@ -123,13 +123,13 @@ const AnalyticsCharts = () => {
                   <Cell key={`cell-${index}`} fill={entry?.color} />
                 ))}
               </Pie>
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#FFFFFF', 
-                  border: '1px solid #E2E8F0', 
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
                   borderRadius: '8px',
                   fontSize: '12px'
-                }} 
+                }}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -142,13 +142,13 @@ const AnalyticsCharts = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
               <XAxis dataKey="type" stroke="#64748B" fontSize={12} />
               <YAxis stroke="#64748B" fontSize={12} />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#FFFFFF', 
-                  border: '1px solid #E2E8F0', 
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
                   borderRadius: '8px',
                   fontSize: '12px'
-                }} 
+                }}
               />
               <Bar dataKey="uploads" fill="#16A34A" radius={[2, 2, 0, 0]} />
               <Bar dataKey="downloads" fill="#0EA5E9" radius={[2, 2, 0, 0]} />
@@ -173,7 +173,7 @@ const AnalyticsCharts = () => {
         ];
 
       case 'usage':
-        const peakHour = usageTimeData?.reduce((max, item) => item?.usage > max?.usage ? item : max);
+        const peakHour = usageTimeData?.reduce((max, item) => item?.usage > max?.usage ? item : max, { usage: 0, hour: '-' });
         return [
           { label: 'Peak Hour', value: peakHour?.hour, icon: 'Clock' },
           { label: 'Peak Usage', value: `${peakHour?.usage}%`, icon: 'Activity' },
@@ -225,10 +225,9 @@ const AnalyticsCharts = () => {
           <button
             key={option?.id}
             onClick={() => setSelectedChart(option?.id)}
-            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-              selectedChart === option?.id
-                ? 'bg-primary text-white' :'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
+            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${selectedChart === option?.id
+                ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
           >
             <Icon name={option?.icon} size={16} />
             <span>{option?.label}</span>
@@ -247,42 +246,10 @@ const AnalyticsCharts = () => {
               <Icon name={stat?.icon} size={16} className="text-primary" />
               <span className="text-xs text-muted-foreground">{stat?.label}</span>
             </div>
-            <div className="text-lg font-semibold text-foreground">{stat?.value}</div>
+            <div className="text-lg font-bold text-foreground">{stat?.value}</div>
           </div>
         ))}
       </div>
-      {/* Legend for Workstation Chart */}
-      {selectedChart === 'workstations' && (
-        <div className="mt-4 pt-3 border-t border-border">
-          <div className="grid grid-cols-2 gap-2">
-            {workstationUtilizationData?.map((item, index) => (
-              <div key={index} className="flex items-center space-x-2">
-                <div 
-                  className="w-3 h-3 rounded-full" 
-                  style={{ backgroundColor: item?.color }}
-                ></div>
-                <span className="text-sm text-muted-foreground">{item?.name}</span>
-                <span className="text-sm font-medium text-foreground">{item?.value}%</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {/* Legend for File Activity Chart */}
-      {selectedChart === 'files' && (
-        <div className="mt-4 pt-3 border-t border-border">
-          <div className="flex items-center justify-center space-x-6">
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 rounded bg-success"></div>
-              <span className="text-sm text-muted-foreground">Uploads</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 rounded bg-accent"></div>
-              <span className="text-sm text-muted-foreground">Downloads</span>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
