@@ -118,6 +118,38 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
     }
   };
 
+  const handleDownloadFiles = async (filesToDownload) => {
+    if (!filesToDownload || filesToDownload.length === 0) {
+      alert('Please select files to download');
+      return;
+    }
+
+    for (const file of filesToDownload) {
+      try {
+        const { data, error } = await downloadFile('user_uploads', file.path);
+        if (data) {
+          const url = URL.createObjectURL(data);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = file.name;
+          document.body.appendChild(a);
+          a.click();
+          URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+
+          if (userId) {
+            await logFileActivity(userId, file.name, 'download');
+          }
+        } else {
+          console.error('Error downloading file:', error);
+          alert(`Failed to download ${file.name}`);
+        }
+      } catch (err) {
+        console.error('Download exception:', err);
+      }
+    }
+  };
+
   const handleQuickAction = async (actionId) => {
     switch (actionId) {
       case 'upload':
@@ -128,37 +160,7 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
         }, 100);
         break;
       case 'download':
-        if (selectedFiles?.length > 0) {
-          // Download each selected file
-          for (const file of selectedFiles) {
-            try {
-              const { data, error } = await downloadFile('user_uploads', file.path);
-              if (data) {
-                // Create a download link
-                const url = URL.createObjectURL(data);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = file.name;
-                document.body.appendChild(a);
-                a.click();
-                URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-
-                // Log activity
-                if (userId) {
-                  await logFileActivity(userId, file.name, 'download');
-                }
-              } else {
-                console.error('Error downloading file:', error);
-                alert(`Failed to download ${file.name}`);
-              }
-            } catch (err) {
-              console.error('Download exception:', err);
-            }
-          }
-        } else {
-          alert('Please select files to download');
-        }
+        handleDownloadFiles(selectedFiles);
         break;
       case 'newfolder':
         const folderName = prompt('Enter folder name:');
@@ -307,6 +309,7 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
                     selectedFiles={selectedFiles}
                     files={files}
                     userEmail={userEmail}
+                    onDownload={handleDownloadFiles}
                   />
                 </div>
               </div>
