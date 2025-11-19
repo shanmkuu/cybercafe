@@ -7,43 +7,55 @@ const UserManagementTable = ({ users }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [filterRole, setFilterRole] = useState('all');
-  const [showAddUser, setShowAddUser] = useState(false);
 
-  const usersData = users ? users.map(user => ({
-    id: user.id,
-    username: user.username || user.email,
-    fullName: user.full_name || 'Unknown',
-    email: user.email || '',
-    role: user.role || 'customer',
-    status: user.status || 'active',
-    lastLogin: user.last_login || null,
-    totalSessions: 0, // Need to fetch or join
-    filesUploaded: 0, // Need to fetch or join
-    avatar: user.avatar_url || "https://via.placeholder.com/150",
-    avatarAlt: user.full_name
-  })) : [];
+  const usersData = users ? users.map(user => {
+    // Derive display name: Full Name -> Username -> Email part -> 'Unknown'
+    let displayName = user.full_name;
+    if (!displayName || displayName === 'Unknown') {
+      if (user.username && user.username.includes('@')) {
+        // If username is email, use part before @
+        displayName = user.username.split('@')[0];
+        // Capitalize first letter
+        displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+      } else {
+        displayName = user.username || user.email?.split('@')[0] || 'Unknown';
+      }
+    }
 
-  const filteredUsers = usersData?.filter((user) => {
-    const matchesSearch = user?.fullName?.toLowerCase()?.includes(searchTerm?.toLowerCase()) ||
-      user?.username?.toLowerCase()?.includes(searchTerm?.toLowerCase()) ||
-      user?.email?.toLowerCase()?.includes(searchTerm?.toLowerCase());
-    const matchesRole = filterRole === 'all' || user?.role === filterRole;
+    return {
+      id: user.id,
+      username: user.email, // Show email as secondary info
+      fullName: displayName,
+      email: user.email || '',
+      role: user.role || 'customer',
+      status: user.status || 'active',
+      lastLogin: user.last_login || null,
+      totalSessions: user.totalSessions || 0,
+      filesUploaded: user.filesUploaded || 0,
+    };
+  }) : [];
+
+  const filteredUsers = usersData.filter((user) => {
+    const matchesSearch = user.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = filterRole === 'all' || user.role === filterRole;
     return matchesSearch && matchesRole;
   });
 
   const handleSelectUser = (userId) => {
     setSelectedUsers((prev) =>
-      prev?.includes(userId) ?
-        prev?.filter((id) => id !== userId) :
+      prev.includes(userId) ?
+        prev.filter((id) => id !== userId) :
         [...prev, userId]
     );
   };
 
   const handleSelectAll = () => {
-    if (selectedUsers?.length === filteredUsers?.length) {
+    if (selectedUsers.length === filteredUsers.length) {
       setSelectedUsers([]);
     } else {
-      setSelectedUsers(filteredUsers?.map((user) => user?.id));
+      setSelectedUsers(filteredUsers.map((user) => user.id));
     }
   };
 
@@ -75,10 +87,8 @@ const UserManagementTable = ({ users }) => {
     <div className="bg-card rounded-lg border border-border p-4 h-full">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-foreground">User Management</h3>
-        <div className="flex items-center space-x-2">
-
-        </div>
       </div>
+
       {/* Search and Filter Controls */}
       <div className="flex items-center space-x-4 mb-4">
         <div className="flex-1">
@@ -86,24 +96,25 @@ const UserManagementTable = ({ users }) => {
             type="search"
             placeholder="Search users by name, username, or email..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e?.target?.value)} />
-
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
         <select
           value={filterRole}
-          onChange={(e) => setFilterRole(e?.target?.value)}
-          className="px-3 py-2 border border-border rounded-lg bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-
+          onChange={(e) => setFilterRole(e.target.value)}
+          className="px-3 py-2 border border-border rounded-lg bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        >
           <option value="all">All Roles</option>
           <option value="admin">Admin</option>
           <option value="customer">Customer</option>
         </select>
       </div>
+
       {/* Bulk Actions */}
-      {selectedUsers?.length > 0 &&
+      {selectedUsers.length > 0 && (
         <div className="flex items-center justify-between p-3 bg-muted rounded-lg mb-4">
           <span className="text-sm text-foreground">
-            {selectedUsers?.length} user{selectedUsers?.length > 1 ? 's' : ''} selected
+            {selectedUsers.length} user{selectedUsers.length > 1 ? 's' : ''} selected
           </span>
           <div className="flex items-center space-x-2">
             <Button variant="outline" size="sm" iconName="Edit">
@@ -117,7 +128,8 @@ const UserManagementTable = ({ users }) => {
             </Button>
           </div>
         </div>
-      }
+      )}
+
       {/* Users Table */}
       <div className="overflow-x-auto max-h-96">
         <table className="w-full">
@@ -126,10 +138,10 @@ const UserManagementTable = ({ users }) => {
               <th className="text-left p-3">
                 <input
                   type="checkbox"
-                  checked={selectedUsers?.length === filteredUsers?.length && filteredUsers?.length > 0}
+                  checked={selectedUsers.length === filteredUsers.length && filteredUsers.length > 0}
                   onChange={handleSelectAll}
-                  className="rounded border-border" />
-
+                  className="rounded border-border"
+                />
               </th>
               <th className="text-left p-3 text-sm font-medium text-muted-foreground">User</th>
               <th className="text-left p-3 text-sm font-medium text-muted-foreground">Role</th>
@@ -141,47 +153,43 @@ const UserManagementTable = ({ users }) => {
             </tr>
           </thead>
           <tbody>
-            {filteredUsers?.map((user) =>
-              <tr key={user?.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+            {filteredUsers.map((user) => (
+              <tr key={user.id} className="border-b border-border hover:bg-muted/50 transition-colors">
                 <td className="p-3">
                   <input
                     type="checkbox"
-                    checked={selectedUsers?.includes(user?.id)}
-                    onChange={() => handleSelectUser(user?.id)}
-                    className="rounded border-border" />
-
+                    checked={selectedUsers.includes(user.id)}
+                    onChange={() => handleSelectUser(user.id)}
+                    className="rounded border-border"
+                  />
                 </td>
                 <td className="p-3">
                   <div className="flex items-center space-x-3">
-                    <img
-                      src={user?.avatar}
-                      alt={user?.avatarAlt}
-                      className="w-8 h-8 rounded-full object-cover" />
-
+                    {/* Avatar removed as requested */}
                     <div>
-                      <div className="font-medium text-foreground">{user?.fullName}</div>
-                      <div className="text-sm text-muted-foreground">{user?.username}</div>
+                      <div className="font-medium text-foreground">{user.fullName}</div>
+                      <div className="text-sm text-muted-foreground">{user.username}</div>
                     </div>
                   </div>
                 </td>
                 <td className="p-3">
-                  <span className={`text-xs px-2 py-1 rounded border ${getRoleBadge(user?.role)}`}>
-                    {user?.role}
+                  <span className={`text-xs px-2 py-1 rounded border ${getRoleBadge(user.role)}`}>
+                    {user.role}
                   </span>
                 </td>
                 <td className="p-3">
-                  <span className={`text-xs px-2 py-1 rounded border ${getStatusBadge(user?.status)}`}>
-                    {user?.status}
+                  <span className={`text-xs px-2 py-1 rounded border ${getStatusBadge(user.status)}`}>
+                    {user.status}
                   </span>
                 </td>
                 <td className="p-3 text-sm text-muted-foreground font-mono">
                   {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() + ' ' + new Date(user.lastLogin).toLocaleTimeString() : '-'}
                 </td>
                 <td className="p-3 text-sm text-foreground font-mono">
-                  {user?.totalSessions}
+                  {user.totalSessions}
                 </td>
                 <td className="p-3 text-sm text-foreground font-mono">
-                  {user?.filesUploaded}
+                  {user.filesUploaded}
                 </td>
                 <td className="p-3">
                   <div className="flex items-center space-x-1">
@@ -191,18 +199,19 @@ const UserManagementTable = ({ users }) => {
                   </div>
                 </td>
               </tr>
-            )}
+            ))}
           </tbody>
         </table>
       </div>
-      {filteredUsers?.length === 0 &&
+
+      {filteredUsers.length === 0 && (
         <div className="text-center py-8">
           <Icon name="Users" size={48} className="text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">No users found matching your criteria</p>
         </div>
-      }
-    </div>);
-
+      )}
+    </div>
+  );
 };
 
 export default UserManagementTable;

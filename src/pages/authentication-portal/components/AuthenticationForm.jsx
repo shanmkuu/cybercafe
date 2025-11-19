@@ -5,7 +5,7 @@ import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import { Checkbox } from '../../../components/ui/Checkbox';
 import { supabase } from '../../../lib/supabase';
-import { verifyPassword } from '../../../lib/password';
+import { createSession } from '../../../lib/db';
 
 const AuthenticationForm = () => {
   const navigate = useNavigate();
@@ -21,11 +21,11 @@ const AuthenticationForm = () => {
   const [loginAttempts, setLoginAttempts] = useState(0);
 
   const handleInputChange = (e) => {
-    const { name, value } = e?.target;
+    const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    
+
     // Clear specific error when user starts typing
-    if (errors?.[name]) {
+    if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
@@ -37,31 +37,28 @@ const AuthenticationForm = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    
-    if (!formData?.email) {
+
+    if (!formData.email) {
       newErrors.email = 'Email address is required';
-    } else if (!/\S+@\S+\.\S+/?.test(formData?.email)) {
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
-    
-    if (!formData?.password) {
+
+    if (!formData.password) {
       newErrors.password = 'Password is required';
-    } else if (formData?.password?.length < 6) {
+    } else if (formData.password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters';
     }
-    
+
     return newErrors;
   };
 
-// You no longer need this import, you can remove it:
-  // import { verifyPassword } from '../../../lib/password';
-
   const handleSubmit = async (e) => {
-    e?.preventDefault();
+    e.preventDefault();
     console.log('handleSubmit called');
-    
+
     const validationErrors = validateForm();
-    if (Object.keys(validationErrors)?.length > 0) {
+    if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       return;
     }
@@ -87,7 +84,7 @@ const AuthenticationForm = () => {
       if (authError) {
         console.error('Supabase Auth Error:', authError.message);
         setLoginAttempts(prev => prev + 1);
-        setErrors({ 
+        setErrors({
           general: 'Invalid email or password. Please check your credentials and try again.'
         });
         setIsLoading(false);
@@ -113,7 +110,7 @@ const AuthenticationForm = () => {
 
       // 3. Validate role matches the one selected on the form
       if (userData.role !== formData.role) {
-        setErrors({ 
+        setErrors({
           general: `This account is registered as '${userData.role}'. Please select the correct access level.`
         });
         await supabase.auth.signOut(); // Log them back out
@@ -122,6 +119,31 @@ const AuthenticationForm = () => {
       }
 
       // 4. EVERYTHING IS GOOD!
+      // Create a session record in the database immediately
+      let newSessionId = null;
+      let newSessionStart = null;
+
+      try {
+        console.log('Creating session for user:', userId);
+        // Defaulting to WS-007 for now as per existing logic, or could be dynamic later
+        const { data: sessionData, error: sessionError } = await createSession(userId, 'WS-007');
+
+        if (sessionData && !sessionError) {
+          console.log('Session created successfully:', sessionData);
+          newSessionId = sessionData.id;
+          newSessionStart = sessionData.start_time;
+
+          // Store in localStorage for the Workspace to pick up
+          localStorage.setItem('sessionId', newSessionId);
+          localStorage.setItem('sessionStartTime', newSessionStart);
+        } else {
+          console.error('Failed to create session record:', sessionError);
+          // We continue anyway, the Workspace might try again or it might be a non-blocking issue
+        }
+      } catch (sessErr) {
+        console.error('Error creating session:', sessErr);
+      }
+
       // Supabase's client now automatically manages the session.
       // We can still save our own local data for the app's convenience.
       const sessionData = {
@@ -130,14 +152,15 @@ const AuthenticationForm = () => {
         role: userData.role,
         userId: authData.user.id,
         timestamp: new Date().toISOString(),
-        rememberDevice: formData.rememberDevice
+        rememberDevice: formData.rememberDevice,
+        sessionId: newSessionId // Add session ID to auth data
       };
 
       localStorage.setItem('cyberCafeAuth', JSON.stringify(sessionData));
-      
+
       // Reset login attempts on successful login
       setLoginAttempts(0);
-      
+
       // Route based on role
       if (userData.role === 'admin') {
         navigate('/administrative-command-center');
@@ -147,8 +170,8 @@ const AuthenticationForm = () => {
       // --- END: NEW LOGIN LOGIC ---
 
     } catch (error) {
-        console.error('A critical error occurred:', error);
-        setErrors({ general: 'Authentication service unavailable. Please try again.' });
+      console.error('A critical error occurred:', error);
+      setErrors({ general: 'Authentication service unavailable. Please try again.' });
     } finally {
       setIsLoading(false);
     }
@@ -179,22 +202,20 @@ const AuthenticationForm = () => {
             <button
               type="button"
               onClick={() => handleRoleChange('customer')}
-              className={`p-4 rounded-xl border-2 transition-all spring-hover ${
-                formData?.role === 'customer' ?'border-primary bg-primary/5 text-primary' :'border-border bg-card text-muted-foreground hover:border-primary/50'
-              }`}
+              className={`p-4 rounded-xl border-2 transition-all spring-hover ${formData.role === 'customer' ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-card text-muted-foreground hover:border-primary/50'
+                }`}
               disabled={isLoading}
             >
               <Icon name="User" size={24} className="mx-auto mb-2" />
               <div className="text-sm font-medium">Customer</div>
               <div className="text-xs opacity-70">File Management</div>
             </button>
-            
+
             <button
               type="button"
               onClick={() => handleRoleChange('admin')}
-              className={`p-4 rounded-xl border-2 transition-all spring-hover ${
-                formData?.role === 'admin' ?'border-primary bg-primary/5 text-primary' :'border-border bg-card text-muted-foreground hover:border-primary/50'
-              }`}
+              className={`p-4 rounded-xl border-2 transition-all spring-hover ${formData.role === 'admin' ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-card text-muted-foreground hover:border-primary/50'
+                }`}
               disabled={isLoading}
             >
               <Icon name="Settings" size={24} className="mx-auto mb-2" />
@@ -229,10 +250,10 @@ const AuthenticationForm = () => {
           label="Email Address"
           type="email"
           name="email"
-          value={formData?.email}
+          value={formData.email}
           onChange={handleInputChange}
           placeholder="Enter your email address"
-          error={errors?.email}
+          error={errors.email}
           required
           disabled={isLoading}
         />
@@ -243,10 +264,10 @@ const AuthenticationForm = () => {
             label="Password"
             type={showPassword ? 'text' : 'password'}
             name="password"
-            value={formData?.password}
+            value={formData.password}
             onChange={handleInputChange}
             placeholder="Enter your password"
-            error={errors?.password}
+            error={errors.password}
             required
             disabled={isLoading}
           />
@@ -263,17 +284,17 @@ const AuthenticationForm = () => {
         {/* Remember Device */}
         <Checkbox
           label="Remember this device for 30 days"
-          checked={formData?.rememberDevice}
-          onChange={(e) => setFormData(prev => ({ ...prev, rememberDevice: e?.target?.checked }))}
+          checked={formData.rememberDevice}
+          onChange={(e) => setFormData(prev => ({ ...prev, rememberDevice: e.target.checked }))}
           disabled={isLoading}
         />
 
         {/* General Error */}
-        {errors?.general && (
+        {errors.general && (
           <div className="p-4 bg-error/10 border border-error/20 rounded-lg">
             <div className="flex items-start space-x-2">
               <Icon name="AlertCircle" size={16} className="text-error mt-0.5" />
-              <div className="text-sm text-error whitespace-pre-line">{errors?.general}</div>
+              <div className="text-sm text-error whitespace-pre-line">{errors.general}</div>
             </div>
           </div>
         )}
@@ -314,7 +335,7 @@ const AuthenticationForm = () => {
           >
             Forgot Password?
           </button>
-          
+
           <button
             type="button"
             onClick={handleEmergencyAccess}

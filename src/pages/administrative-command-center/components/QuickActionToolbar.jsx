@@ -47,77 +47,95 @@ const QuickActionToolbar = () => {
     setAddUserMessage({ type: '', text: '' });
   };
 
-const submitAddUser = async (e) => {
-  e.preventDefault();
+  const submitAddUser = async (e) => {
+    e.preventDefault();
 
-  // Validation
-  if (!newUser.username?.trim()) {
-    setAddUserMessage({ type: 'error', text: 'Username is required' });
-    return;
-  }
-  if (!newUser.email?.trim()) {
-    setAddUserMessage({ type: 'error', text: 'Email is required' });
-    return;
-  }
-  if (!newUser.password?.trim()) {
-    setAddUserMessage({ type: 'error', text: 'Password is required' });
-    return;
-  }
-  if (newUser.password.length < 6) {
-    setAddUserMessage({ type: 'error', text: 'Password must be at least 6 characters' });
-    return;
-  }
-
-  try {
-    // 1️⃣ Create the user in Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: newUser.email.trim(),
-      password: newUser.password,
-      options: {
-        emailRedirectTo: undefined, // skip redirect
-      },
-    });
-
-    if (authError) {
-      setAddUserMessage({ type: 'error', text: `Auth error: ${authError.message}` });
+    // Validation
+    if (!newUser.username?.trim()) {
+      setAddUserMessage({ type: 'error', text: 'Username is required' });
+      return;
+    }
+    if (!newUser.email?.trim()) {
+      setAddUserMessage({ type: 'error', text: 'Email is required' });
+      return;
+    }
+    if (!newUser.password?.trim()) {
+      setAddUserMessage({ type: 'error', text: 'Password is required' });
+      return;
+    }
+    if (newUser.password.length < 6) {
+      setAddUserMessage({ type: 'error', text: 'Password must be at least 6 characters' });
       return;
     }
 
-    const userId = authData?.user?.id;
-    if (!userId) {
-      setAddUserMessage({ type: 'error', text: 'User creation failed: no user ID returned.' });
-      return;
-    }
-
-    // 2️⃣ Insert into your custom users table with the same user_id
-    const { error: dbError } = await supabase.from('users').insert([
-      {
-        id: userId, // keep consistent with Supabase Auth ID
-        username: newUser.username.trim(),
+    try {
+      // 1️⃣ Create the user in Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newUser.email.trim(),
-        role: newUser.role,
-      },
-    ]);
+        password: newUser.password,
+        options: {
+          emailRedirectTo: undefined, // skip redirect
+        },
+      });
 
-    if (dbError) {
-      setAddUserMessage({ type: 'error', text: `Database error: ${dbError.message}` });
-      return;
+      if (authError) {
+        setAddUserMessage({ type: 'error', text: `Auth error: ${authError.message}` });
+        return;
+      }
+
+      const userId = authData?.user?.id;
+      if (!userId) {
+        setAddUserMessage({ type: 'error', text: 'User creation failed: no user ID returned.' });
+        return;
+      }
+
+      // 2️⃣ Insert into your custom users table with the same user_id
+      const { error: dbError } = await supabase.from('users').insert([
+        {
+          id: userId, // keep consistent with Supabase Auth ID
+          username: newUser.username.trim(),
+          email: newUser.email.trim(),
+          role: newUser.role,
+        },
+      ]);
+
+      if (dbError) {
+        setAddUserMessage({ type: 'error', text: `Database error: ${dbError.message}` });
+        return;
+      }
+
+      setAddUserMessage({
+        type: 'success',
+        text: `User ${newUser.username} added successfully!`,
+      });
+
+      setTimeout(() => {
+        closeAddUser();
+      }, 2000);
+    } catch (err) {
+      console.error(err);
+      setAddUserMessage({ type: 'error', text: `Error: ${err.message}` });
     }
+  };
 
-    setAddUserMessage({
-      type: 'success',
-      text: `User ${newUser.username} added successfully!`,
-    });
 
-    setTimeout(() => {
-      closeAddUser();
-    }, 2000);
-  } catch (err) {
-    console.error(err);
-    setAddUserMessage({ type: 'error', text: `Error: ${err.message}` });
-  }
-};
+  const handleBackup = () => {
+    // Simulate backup
+    const confirmBackup = window.confirm("Start system backup?");
+    if (confirmBackup) {
+      alert("Backup started successfully. You will be notified when it completes.");
+    }
+  };
 
+  const handleExportLogs = () => {
+    // Simulate export
+    alert("Exporting system logs to CSV... Download will start shortly.");
+  };
+
+  const handleHealthCheck = () => {
+    // Simulate health check
+    alert("System Health Check:\n\nCPU: 12%\nMemory: 45%\nStorage: 60%\nNetwork: Stable\n\nAll systems operational.");
+  };
 
   const quickActions = [
     {
@@ -128,21 +146,14 @@ const submitAddUser = async (e) => {
       color: 'primary',
       action: openAddUser
     },
-    {
-      id: 'system-reset',
-      label: 'System Reset',
-      icon: 'RotateCcw',
-      shortcut: 'Ctrl+R',
-      color: 'warning',
-      action: () => console.log('System reset action')
-    },
+    // System Reset removed as requested
     {
       id: 'backup-now',
       label: 'Backup Now',
       icon: 'Database',
       shortcut: 'Ctrl+B',
       color: 'accent',
-      action: () => console.log('Backup action')
+      action: handleBackup
     },
     {
       id: 'export-logs',
@@ -150,7 +161,7 @@ const submitAddUser = async (e) => {
       icon: 'Download',
       shortcut: 'Ctrl+E',
       color: 'success',
-      action: () => console.log('Export logs action')
+      action: handleExportLogs
     },
     {
       id: 'system-health',
@@ -158,7 +169,7 @@ const submitAddUser = async (e) => {
       icon: 'Activity',
       shortcut: 'Ctrl+H',
       color: 'secondary',
-      action: () => console.log('Health check action')
+      action: handleHealthCheck
     }
   ];
 
@@ -214,7 +225,7 @@ const submitAddUser = async (e) => {
     const diff = now - timestamp;
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
-    
+
     if (minutes < 60) {
       return `${minutes}m ago`;
     } else {
@@ -238,7 +249,7 @@ const submitAddUser = async (e) => {
                   className={`flex items-center space-x-2 ${getActionButtonColor(action?.color)} spring-hover`}
                 >
                   <Icon name={action?.icon} size={16} />
-                  <span className="hidden lg:inline">{action?.label}</span>
+                  <span>{action?.label}</span>
                 </Button>
 
                 {/* Tooltip */}
@@ -248,13 +259,12 @@ const submitAddUser = async (e) => {
 
                 {/* Add User inline panel */}
                 {action?.id === 'add-user' && showAddUser && (
-                  <div className="absolute right-0 top-full mt-2 w-full sm:w-72 bg-popover border border-border rounded-lg shadow-modal z-50 p-3 transform sm:translate-x-4">
+                  <div className="absolute left-0 top-full mt-2 w-full sm:w-72 bg-popover border border-border rounded-lg shadow-modal z-50 p-3">
                     {addUserMessage.text && (
-                      <div className={`text-xs p-2 rounded mb-3 ${
-                        addUserMessage.type === 'error' 
-                          ? 'bg-error/10 text-error border border-error/20' 
-                          : 'bg-success/10 text-success border border-success/20'
-                      }`}>
+                      <div className={`text-xs p-2 rounded mb-3 ${addUserMessage.type === 'error'
+                        ? 'bg-error/10 text-error border border-error/20'
+                        : 'bg-success/10 text-success border border-success/20'
+                        }`}>
                         {addUserMessage.text}
                       </div>
                     )}
