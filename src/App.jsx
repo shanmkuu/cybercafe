@@ -115,6 +115,16 @@ function App() {
             localStorage.setItem('sessionId', session.id);
           }
         }
+        // Notify local Node server to unlock desktop (for kiosk flow)
+        try {
+          await fetch('http://localhost:3001/api/unlock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+        } catch (err) {
+          console.error('Failed to signal unlock to local server:', err);
+          // Optional: Alert admin if the local server isn't running.
+        }
       } else {
         throw new Error('Authentication failed. Please check your email for confirmation or try again.');
       }
