@@ -76,13 +76,18 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
         // Create new session if one doesn't exist
         try {
           console.log('Creating new session for', user.id);
+          // Set a client-side start time immediately so the UI timer doesn't wait on the DB
+          const clientStartIso = new Date().toISOString();
+          setSessionStartTime(new Date(clientStartIso));
+          localStorage.setItem('sessionStartTime', clientStartIso);
+
+          // Still create the session record in the DB, but don't rely on its started_at for the UI
           const { data, error } = await createSession(user.id, 'WS-007'); // Default workstation ID
           if (data && !error) {
             console.log('Session created:', data);
             setSessionId(data.id);
-            setSessionStartTime(new Date(data.start_time));
             localStorage.setItem('sessionId', data.id);
-            localStorage.setItem('sessionStartTime', data.start_time);
+            // Intentionally DO NOT overwrite the client-side sessionStartTime with DB started_at
           } else {
             console.error('Failed to create session:', error);
           }
@@ -257,23 +262,42 @@ const CustomerWorkspacePortal = ({ userRole, onLogout, isAuthenticated }) => {
 
   const handleEndSession = async () => {
     if (confirm('Are you sure you want to end your session?')) {
-      if (sessionId) {
-        await endSession(sessionId);
+      try {
+        if (sessionId) {
+          await endSession(sessionId);
+        }
+      } catch (err) {
+        console.error('Failed to end session:', err);
+        // proceed with local cleanup regardless
+      } finally {
         localStorage.removeItem('sessionId');
         localStorage.removeItem('sessionStartTime');
+        onLogout?.();
       }
-      onLogout?.();
     }
   };
 
   const handleLogoutClick = async () => {
     if (confirm('Are you sure you want to sign out?')) {
-      if (sessionId) {
-        await endSession(sessionId);
+      try {
+        if (sessionId) {
+          await endSession(sessionId);
+        }
+      } catch (err) {
+        console.error('Failed to end session on sign out:', err);
+        // continue with client-side sign out
+      } finally {
+        // Ensure we clear local state even if DB call failed
         localStorage.removeItem('sessionId');
         localStorage.removeItem('sessionStartTime');
+        try {
+          // Attempt to sign out of Supabase auth too (best-effort)
+          (await import('../../lib/supabase')).supabase.auth.signOut();
+        } catch (signErr) {
+          console.debug('Supabase signOut failed (non-fatal):', signErr?.message || signErr);
+        }
+        onLogout?.();
       }
-      onLogout?.();
     }
   };
 

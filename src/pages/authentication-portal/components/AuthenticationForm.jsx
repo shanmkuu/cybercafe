@@ -91,17 +91,17 @@ const AuthenticationForm = () => {
         return;
       }
 
-      // 2. Auth was successful! Now get the user's role from our *public* 'users' table
+      // 2. Auth was successful! Now get the user's role from our *public* 'profiles' table
       const userId = authData.user.id;
       const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('role, username') // Only select what we need
+        .from('profiles')
+        .select('role, username, full_name') // Only select what we need
         .eq('id', userId)
         .single();
 
       if (userError || !userData) {
         // This is a critical error: user is authenticated but has no profile.
-        console.error('User logged in but profile data not found in "users" table.', userError);
+        console.error('User logged in but profile data not found in "profiles" table.', userError);
         setErrors({ general: 'Login successful, but failed to retrieve user profile. Please contact support.' });
         await supabase.auth.signOut(); // Log them back out for safety
         setIsLoading(false);
@@ -125,20 +125,22 @@ const AuthenticationForm = () => {
 
       try {
         console.log('Creating session for user:', userId);
+        // Immediately set a client-side start time so the UI timer doesn't wait on the DB
+        const clientStart = new Date().toISOString();
+        newSessionStart = clientStart;
+        localStorage.setItem('sessionStartTime', newSessionStart);
+
         // Defaulting to WS-007 for now as per existing logic, or could be dynamic later
         const { data: sessionData, error: sessionError } = await createSession(userId, 'WS-007');
 
         if (sessionData && !sessionError) {
-          console.log('Session created successfully:', sessionData);
+          console.log('Session created successfully (DB):', sessionData);
           newSessionId = sessionData.id;
-          newSessionStart = sessionData.start_time;
-
-          // Store in localStorage for the Workspace to pick up
+          // Store sessionId but keep the client-side start time for UI
           localStorage.setItem('sessionId', newSessionId);
-          localStorage.setItem('sessionStartTime', newSessionStart);
         } else {
           console.error('Failed to create session record:', sessionError);
-          // We continue anyway, the Workspace might try again or it might be a non-blocking issue
+          // We continue anyway, UI uses client start time
         }
       } catch (sessErr) {
         console.error('Error creating session:', sessErr);

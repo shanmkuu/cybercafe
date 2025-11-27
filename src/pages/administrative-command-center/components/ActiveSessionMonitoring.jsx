@@ -1,11 +1,74 @@
 import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
+import { supabase } from '../../../lib/supabase';
+import { getActiveSessions, terminateSession } from '../../../lib/db';
 
 const ActiveSessionMonitoring = ({ sessions }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [liveSessions, setLiveSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
+  // Fetch active sessions from database
+  const fetchSessions = async () => {
+    try {
+      console.log('Fetching active sessions...');
+      const { data, error } = await getActiveSessions();
+      console.log('Fetch result - Data:', data, 'Error:', error);
+      if (error) {
+        console.error('Error fetching sessions:', error);
+        return;
+      }
+      console.log('Sessions fetched:', data?.length || 0);
+      setLiveSessions(data || []);
+    } catch (err) {
+      console.error('Error fetching sessions:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle manual session termination
+  const handleTerminateSession = async (sessionId) => {
+    try {
+      const { error } = await terminateSession(sessionId);
+      if (error) {
+        console.error('Error terminating session:', error);
+        alert('Failed to terminate session');
+        return;
+      }
+      // Refresh sessions list
+      fetchSessions();
+    } catch (err) {
+      console.error('Error terminating session:', err);
+      alert('Error terminating session');
+    }
+  };
+
+  // Initial fetch and set up real-time subscription
+  useEffect(() => {
+    fetchSessions();
+
+    // Subscribe to real-time changes in sessions table
+    const channel = supabase
+      .channel('public:sessions')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sessions' },
+        (payload) => {
+          console.log('Session change detected:', payload);
+          fetchSessions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Timer for current time
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -14,49 +77,66 @@ const ActiveSessionMonitoring = ({ sessions }) => {
     return () => clearInterval(timer);
   }, []);
 
-  const activeSessionsData = sessions ? sessions.map(session => ({
+  // Map live sessions to display data
+  const activeSessionsData = liveSessions.map(session => ({
     id: session.id,
-    workstation: session.workstation_id || 'Unknown', // Need to join or fetch workstation name
+    workstation: session.workstation_id || 'Unknown',
     user: session.profiles?.full_name || 'Guest',
     username: session.profiles?.username || 'guest',
-    startTime: new Date(session.start_time),
-    activity: 'Active', // Placeholder or infer from logs
-    filesAccessed: 0, // Placeholder
-    dataTransfer: '-', // Placeholder
-    ipAddress: '-', // Placeholder
-    status: session.status,
+    startTime: new Date(session.started_at),
+    endTime: session.ended_at ? new Date(session.ended_at) : null,
+    activity: 'Active',
+    filesAccessed: 0,
+    dataTransfer: '-',
+    ipAddress: '-',
+    status: session.ended_at ? 'ended' : 'active',
+    event: session.event,
     avatar: session.profiles?.avatar_url || "https://via.placeholder.com/150",
-    avatarAlt: session.profiles?.full_name
-  })) : [];
+    avatarAlt: session.profiles?.full_name || 'User'
+  }));
 
-  const calculateSessionDuration = (startTime) => {
-    const duration = currentTime - startTime;
+  const calculateSessionDuration = (startTime, endTime = null) => {
+    const end = endTime || currentTime;
+    const duration = end - startTime;
     const hours = Math.floor(duration / (1000 * 60 * 60));
-    const minutes = Math.floor(duration % (1000 * 60 * 60) / (1000 * 60));
-    return `${hours}h ${minutes}m`;
+    const minutes = Math.floor((duration % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((duration % (1000 * 60)) / 1000);
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    } else {
+      return `${seconds}s`;
+    }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'active':
-        return { icon: 'Activity', color: 'text-success' };
-      case 'idle':
-        return { icon: 'Clock', color: 'text-warning' };
-      case 'away':
-        return { icon: 'Moon', color: 'text-muted-foreground' };
+  const getStatusIcon = (event, status) => {
+    if (status === 'ended') {
+      return { icon: 'LogOut', color: 'text-muted-foreground' };
+    }
+    switch (event) {
+      case 'login':
+        return { icon: 'LogIn', color: 'text-success' };
+      case 'logout':
+        return { icon: 'LogOut', color: 'text-muted-foreground' };
+      case 'activity':
+        return { icon: 'Activity', color: 'text-accent' };
       default:
         return { icon: 'Circle', color: 'text-muted-foreground' };
     }
   };
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'active':
+  const getStatusBadge = (event, status) => {
+    if (status === 'ended') {
+      return 'bg-muted text-muted-foreground border-border';
+    }
+    switch (event) {
+      case 'login':
+      case 'activity':
         return 'bg-success/10 text-success border-success/20';
-      case 'idle':
+      case 'logout':
         return 'bg-warning/10 text-warning border-warning/20';
-      case 'away':
-        return 'bg-muted text-muted-foreground border-border';
       default:
         return 'bg-muted text-muted-foreground border-border';
     }
@@ -86,33 +166,42 @@ const ActiveSessionMonitoring = ({ sessions }) => {
             variant="ghost"
             size="sm"
             iconName="RefreshCw"
-            onClick={() => setAutoRefresh(!autoRefresh)} />
+            onClick={() => { setAutoRefresh(!autoRefresh); fetchSessions(); }} />
 
         </div>
       </div>
       <div className="space-y-3 max-h-96 overflow-y-auto">
-        {activeSessionsData?.map((session) => {
-          const statusInfo = getStatusIcon(session?.status);
-          const activityIcon = getActivityIcon(session?.activity);
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <span className="text-muted-foreground">Loading sessions...</span>
+          </div>
+        ) : activeSessionsData.length === 0 ? (
+          <div className="flex items-center justify-center h-32">
+            <span className="text-muted-foreground">No active sessions</span>
+          </div>
+        ) : (
+          activeSessionsData.map((session) => {
+            const statusInfo = getStatusIcon(session?.event, session?.status);
+            const activityIcon = getActivityIcon(session?.activity);
 
-          return (
-            <div key={session?.id} className="border border-border rounded-lg p-4 hover:bg-muted/50 transition-colors">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center space-x-3">
-                  <img
-                    src={session?.avatar}
-                    alt={session?.avatarAlt}
-                    className="w-10 h-10 rounded-full object-cover" />
+            return (
+              <div key={session?.id} className="border border-border rounded-lg p-4 hover:bg-muted/50 transition-colors">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    <img
+                      src={session?.avatar}
+                      alt={session?.avatarAlt}
+                      className="w-10 h-10 rounded-full object-cover" />
 
-                  <div>
-                    <div className="font-medium text-foreground">{session?.user}</div>
-                    <div className="text-sm text-muted-foreground">{session?.workstation}</div>
+                    <div>
+                      <div className="font-medium text-foreground">{session?.user}</div>
+                      <div className="text-sm text-muted-foreground">{session?.workstation}</div>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className={`text-xs px-2 py-1 rounded border ${getStatusBadge(session?.status)}`}>
-                    {session?.status}
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className={`text-xs px-2 py-1 rounded border ${getStatusBadge(session?.event, session?.status)}`}>
+                      {session?.event || 'activity'}
+                    </span>
                   <Button variant="ghost" size="sm" iconName="MoreHorizontal" />
                 </div>
               </div>
@@ -146,21 +235,26 @@ const ActiveSessionMonitoring = ({ sessions }) => {
                   <span className="font-mono">{session?.ipAddress}</span>
                 </div>
                 <div className="flex items-center space-x-1">
-                  <Button variant="ghost" size="sm" iconName="Eye" />
-                  <Button variant="ghost" size="sm" iconName="MessageSquare" />
-                  <Button variant="outline" size="sm" iconName="LogOut" />
+                  <Button variant="ghost" size="sm" iconName="Eye" title="View details" />
+                  <Button variant="ghost" size="sm" iconName="MessageSquare" title="Send message" />
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    iconName="LogOut"
+                    title="Terminate session"
+                    onClick={() => {
+                      if (window.confirm(`Terminate session for ${session?.user}?`)) {
+                        handleTerminateSession(session?.id);
+                      }
+                    }}
+                  />
                 </div>
               </div>
-            </div>);
-
-        })}
+            </div>
+            );
+          })
+        )}
       </div>
-      {activeSessionsData?.length === 0 &&
-        <div className="text-center py-8">
-          <Icon name="Monitor" size={48} className="text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">No active sessions</p>
-        </div>
-      }
       <div className="mt-4 pt-3 border-t border-border">
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>Last updated: {currentTime?.toLocaleTimeString()}</span>

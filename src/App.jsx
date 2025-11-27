@@ -140,22 +140,36 @@ function App() {
   const isFormValid = formData.email && formData.password;
 
   const handleLogout = async () => {
-    // End DB Session if exists
+    // End DB Session if exists, but always cleanup local state even on error
     const sessionId = localStorage.getItem('sessionId');
-    if (sessionId) {
-      await endSession(sessionId);
-      localStorage.removeItem('sessionId');
-    }
+    try {
+      if (sessionId) {
+        await endSession(sessionId);
+        localStorage.removeItem('sessionId');
+      }
+    } catch (err) {
+      console.error('Error ending DB session during logout:', err);
+      // proceed with local cleanup regardless
+    } finally {
+      try {
+        // Also sign out from Supabase auth if possible
+        // This is non-critical; if it fails we'll still clear local state
+        // eslint-disable-next-line no-undef
+        await (await import('./lib/supabase')).supabase.auth.signOut();
+      } catch (signErr) {
+        console.debug('Supabase signOut failed (non-fatal):', signErr?.message || signErr);
+      }
 
-    setIsAuthenticated(false);
-    setUserRole(null);
-    setSessionStartTime(null);
-    localStorage.removeItem('isAuthenticated');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('sessionStartTime');
-    setFormData({ email: '', password: '', role: 'customer' });
-    setErrors({});
+      setIsAuthenticated(false);
+      setUserRole(null);
+      setSessionStartTime(null);
+      localStorage.removeItem('isAuthenticated');
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('userEmail');
+      localStorage.removeItem('sessionStartTime');
+      setFormData({ email: '', password: '', role: 'customer' });
+      setErrors({});
+    }
   };
 
   // Check for existing authentication on component mount

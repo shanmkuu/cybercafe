@@ -22,25 +22,89 @@ const AdministrativeCommandCenter = ({ userRole, onLogout, isAuthenticated }) =>
 
   // Helper functions for processing analytics data
   const processSessionTrend = (sessions) => {
-    // Placeholder logic - would need to group sessions by day
-    return [
-      { day: 'Mon', sessions: 0, revenue: 0 },
-      { day: 'Tue', sessions: 0, revenue: 0 },
-      { day: 'Wed', sessions: 0, revenue: 0 },
-      { day: 'Thu', sessions: 0, revenue: 0 },
-      { day: 'Fri', sessions: 0, revenue: 0 },
-      { day: 'Sat', sessions: 0, revenue: 0 },
-      { day: 'Sun', sessions: 0, revenue: 0 }
-    ];
+    // Group sessions by day for the last N days (sessions are expected to be within the requested range)
+    try {
+      const daysMap = new Map();
+      // Initialize last 7 days labels (starting from 6 days ago to today)
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const key = d.toLocaleDateString(undefined, { weekday: 'short' }); // Mon, Tue...
+        const iso = d.toISOString().slice(0, 10); // YYYY-MM-DD
+        daysMap.set(iso, { label: key, sessions: 0, minutes: 0 });
+      }
+
+      const ratePerMinute = 0.05; // $0.05 per minute as an estimated revenue driver
+
+      (sessions || []).forEach(s => {
+        const started = s?.started_at ? new Date(s.started_at) : null;
+        const ended = s?.ended_at ? new Date(s.ended_at) : new Date();
+        if (!started) return;
+        const iso = started.toISOString().slice(0, 10);
+        if (!daysMap.has(iso)) return; // out of range
+
+        const minutes = Math.max(0, Math.round((ended - started) / 60000));
+        const entry = daysMap.get(iso);
+        entry.sessions = (entry.sessions || 0) + 1;
+        entry.minutes = (entry.minutes || 0) + minutes;
+        daysMap.set(iso, entry);
+      });
+
+      // Convert map to array preserving date order
+      const result = Array.from(daysMap.entries()).map(([iso, val]) => ({
+        day: val.label,
+        sessions: val.sessions || 0,
+        revenue: Math.round((val.minutes || 0) * ratePerMinute * 100) / 100 // round to cents
+      }));
+
+      return result;
+    } catch (err) {
+      console.error('processSessionTrend error', err);
+      return [];
+    }
   };
 
   const processUsageTime = (sessions) => {
-    // Placeholder logic
-    return [
-      { hour: '06:00', usage: 0 },
-      { hour: '12:00', usage: 0 },
-      { hour: '18:00', usage: 0 }
-    ];
+    try {
+      // We'll build 2-hour buckets from 06:00 to 22:00 to match the chart
+      const bucketHours = [6, 8, 10, 12, 14, 16, 18, 20, 22];
+      const buckets = bucketHours.map(h => ({ hour: String(h).padStart(2, '0') + ':00', minutes: 0 }));
+
+      const days = 7; // assuming getAllSessions was called with 7 days
+
+      (sessions || []).forEach(s => {
+        const start = s?.started_at ? new Date(s.started_at) : null;
+        const end = s?.ended_at ? new Date(s.ended_at) : new Date();
+        if (!start) return;
+
+        // For each bucket, compute overlap in minutes
+        buckets.forEach((b, idx) => {
+          const bucketStart = new Date(start);
+          bucketStart.setHours(bucketHours[idx], 0, 0, 0);
+          const bucketEnd = new Date(bucketStart);
+          bucketEnd.setHours(bucketStart.getHours() + 2);
+
+          // If session spans multiple days, clamp to session day for start
+          // We'll iterate per session-day chunk: for simplicity assume sessions are short
+          const overlapStart = start > bucketStart ? start : bucketStart;
+          const overlapEnd = end < bucketEnd ? end : bucketEnd;
+          const overlapMs = Math.max(0, overlapEnd - overlapStart);
+          const overlapMins = Math.floor(overlapMs / 60000);
+          if (overlapMins > 0) b.minutes += overlapMins;
+        });
+      });
+
+      // Convert to usage metric. We'll use average minutes per day in the bucket as the usage value
+      const usage = buckets.map(b => ({
+        hour: b.hour,
+        usage: Math.round((b.minutes || 0) / days)
+      }));
+
+      return usage;
+    } catch (err) {
+      console.error('processUsageTime error', err);
+      return [];
+    }
   };
 
   const processWorkstationUtilization = (workstations, sessions) => {

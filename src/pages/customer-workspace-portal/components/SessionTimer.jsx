@@ -12,6 +12,19 @@ const SessionTimer = ({
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showExtendModal, setShowExtendModal] = useState(false);
 
+  // Normalize sessionStartTime prop to a Date instance and handle invalid values
+  let normalizedStart = sessionStartTime;
+  if (!(sessionStartTime instanceof Date)) {
+    try {
+      normalizedStart = new Date(sessionStartTime);
+    } catch (e) {
+      normalizedStart = new Date(Date.now() - 3600000);
+    }
+  }
+  if (isNaN(normalizedStart?.getTime?.())) {
+    normalizedStart = new Date(Date.now() - 3600000);
+  }
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -21,7 +34,7 @@ const SessionTimer = ({
   }, []);
 
   const getElapsedTime = () => {
-    const elapsed = Math.floor((currentTime - sessionStartTime) / 1000);
+    const elapsed = Math.floor((currentTime - normalizedStart) / 1000);
     const hours = Math.floor(elapsed / 3600);
     const minutes = Math.floor((elapsed % 3600) / 60);
     const seconds = elapsed % 60;
@@ -29,7 +42,7 @@ const SessionTimer = ({
   };
 
   const getRemainingTime = () => {
-    const elapsedSeconds = Math.floor((currentTime - sessionStartTime) / 1000);
+  const elapsedSeconds = Math.floor((currentTime - normalizedStart) / 1000);
     const totalSeconds = remainingCredit * 60;
     const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
     
